@@ -1,0 +1,1672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yahtzee Deluxe Edition</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=Cinzel:wght@700&display=swap');
+        
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at center, #1b382b 0%, #0a1710 100%);
+            min-height: 100vh;
+            color: #f3f4f6;
+            user-select: none;
+        }
+
+        .font-cinzel {
+            font-family: 'Cinzel', serif;
+        }
+
+        /* Felt Texture Pattern */
+        .felt-bg {
+            background-color: #143022;
+            background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 0);
+            background-size: 16px 16px;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+        }
+
+        /* 3D Dice Styling & Animations */
+        .dice-container {
+            perspective: 1000px;
+        }
+
+        .dice-3d {
+            width: 72px;
+            height: 72px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.1s ease-out;
+            cursor: pointer;
+        }
+
+        .dice-rolling {
+            animation: roll3D 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        @keyframes roll3D {
+            0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(0.9); }
+            30% { transform: rotateX(360deg) rotateY(180deg) rotateZ(90deg) translateY(-30px) scale(1.1); }
+            70% { transform: rotateX(720deg) rotateY(540deg) rotateZ(270deg) translateY(-10px) scale(1.05); }
+            100% { transform: rotateX(1080deg) rotateY(720deg) rotateZ(360deg) translateY(0) scale(1); }
+        }
+
+        .dice-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 16px;
+            background: linear-gradient(145deg, #ffffff, #e6e6e6);
+            box-shadow: inset 0 2px 4px rgba(255,255,255,0.8), 0 8px 16px rgba(0,0,0,0.4);
+            display: grid;
+            grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+            padding: 8px;
+            box-sizing: border-box;
+            border: 2px solid #d1d5db;
+        }
+
+        .dice-held .dice-face {
+            background: linear-gradient(145deg, #fef08a, #facc15);
+            border-color: #ca8a04;
+            box-shadow: 0 0 15px rgba(234, 179, 8, 0.6), inset 0 2px 4px rgba(255,255,255,0.8);
+        }
+
+        .pip {
+            width: 12px;
+            height: 12px;
+            background-color: #1f2937;
+            border-radius: 50%;
+            align-self: center;
+            justify-self: center;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+        }
+
+        .dice-held .pip {
+            background-color: #422006;
+        }
+
+        .red-pip {
+            background-color: #dc2626 !important;
+        }
+
+        /* Glassmorphism Cards */
+        .glass-panel {
+            background: rgba(15, 30, 22, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Authentic Score Sheet Paper & Active Column Zoom Styling */
+        .score-sheet-container {
+            background: radial-gradient(circle at center, rgba(16, 37, 26, 0.95), rgba(8, 18, 13, 0.98));
+            border-radius: 1.25rem;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            overflow-x: auto;
+        }
+
+        .player-col {
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            min-width: 90px;
+        }
+
+        /* Active Player Zoom & Focus Effect */
+        .player-col.active-col {
+            transform: scale(1.04);
+            z-index: 10;
+            background: linear-gradient(180deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.08) 100%);
+            border-left: 2px solid #f59e0b !important;
+            border-right: 2px solid #f59e0b !important;
+            box-shadow: 0 0 25px rgba(245, 158, 11, 0.25), inset 0 0 10px rgba(245, 158, 11, 0.1);
+            min-width: 125px;
+        }
+
+        .player-col.inactive-col {
+            opacity: 0.75;
+            filter: saturate(0.85);
+        }
+
+        .player-col.inactive-col:hover {
+            opacity: 0.95;
+            filter: saturate(1);
+        }
+
+        /* Interactive Score Slot Button */
+        .score-slot-btn {
+            transition: all 0.2s ease;
+        }
+        .score-slot-btn.selectable {
+            cursor: pointer;
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px dashed rgba(245, 158, 11, 0.6);
+            animation: pulseSlot 1.8s infinite;
+        }
+        .score-slot-btn.selectable:hover {
+            background: rgba(245, 158, 11, 0.35);
+            border: 1px solid #f59e0b;
+            transform: scale(1.05);
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+        }
+
+        @keyframes pulseSlot {
+            0%, 100% { border-color: rgba(245, 158, 11, 0.4); }
+            50% { border-color: rgba(245, 158, 11, 0.9); }
+        }
+
+        /* Custom Button Styling */
+        .btn-gold {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            box-shadow: 0 4px 15px rgba(217, 119, 6, 0.4);
+            transition: all 0.2s ease;
+        }
+        .btn-gold:hover {
+            background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(217, 119, 6, 0.6);
+        }
+        .btn-gold:active {
+            transform: translateY(1px);
+        }
+
+        .btn-gold:disabled {
+            background: #4b5563;
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen text-gray-100">
+
+    <script>
+        // Web Audio API Sound Generator for tactile dice & game audio
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.soundEnabled = true;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playDiceRoll() {
+                if (!this.soundEnabled) return;
+                this.init();
+                
+                // Play a series of randomized clack sounds
+                const rolls = 4 + Math.floor(Math.random() * 3);
+                for (let i = 0; i < rolls; i++) {
+                    setTimeout(() => {
+                        this.playClack(200 + Math.random() * 400);
+                    }, i * 80 + Math.random() * 40);
+                }
+            }
+
+            playClack(freq) {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.05);
+
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.05);
+            }
+
+            playToggleHold() {
+                if (!this.soundEnabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + 0.08);
+
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+
+            playScoreSelect() {
+                if (!this.soundEnabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, this.ctx.currentTime); // C5
+                osc.frequency.setValueAtTime(659.25, this.ctx.currentTime + 0.08); // E5
+
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.25);
+            }
+
+            playYahtzee() {
+                if (!this.soundEnabled) return;
+                this.init();
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, idx) => {
+                    setTimeout(() => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start();
+                        osc.stop(this.ctx.currentTime + 0.3);
+                    }, idx * 100);
+                });
+            }
+        }
+
+        const audio = new SoundEngine();
+    </script>
+
+    <!-- Navigation Header -->
+    <header class="w-full px-6 py-4 glass-panel border-b border-white/10 flex items-center justify-between z-20 sticky top-0">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-xl font-bold">
+                <i class="fa-solid fa-dice-five"></i>
+            </div>
+            <span class="text-2xl font-black tracking-wider font-cinzel text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-amber-600">
+                YAHTZEE <span class="text-xs tracking-normal font-sans text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full ml-1">DELUXE</span>
+            </span>
+        </div>
+
+        <div class="flex items-center gap-2 sm:gap-4">
+            <button id="soundToggleBtn" class="p-2.5 rounded-lg glass-card hover:bg-white/10 text-gray-300 transition-colors" title="Toggle Sound">
+                <i class="fa-solid fa-volume-high text-lg" id="soundIcon"></i>
+            </button>
+            <button id="rulesBtn" class="p-2.5 rounded-lg glass-card hover:bg-white/10 text-gray-300 transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-circle-question text-lg"></i>
+                <span class="hidden sm:inline text-sm font-medium">Rules</span>
+            </button>
+            <button id="highScoresBtn" class="p-2.5 rounded-lg glass-card hover:bg-white/10 text-amber-400 transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-trophy text-lg"></i>
+                <span class="hidden sm:inline text-sm font-medium">High Scores</span>
+            </button>
+            <button id="newGameBtn" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-all shadow-lg flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i>
+                <span>New Game</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- LEFT COLUMN: Dice Felt Table & Rolling Station (lg:col-span-5) -->
+        <section class="lg:col-span-5 flex flex-col gap-6 sticky top-20 z-20 lg:self-start">
+            
+            <!-- Current Turn & Status Header Card -->
+            <div class="glass-panel p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-white/10 shadow-2xl">
+                <div>
+                    <span class="text-xs font-semibold text-gray-400 uppercase tracking-widest block">Current Turn</span>
+                    <div class="flex items-center gap-3 mt-1">
+                        <div id="activePlayerAvatar" class="w-8 h-8 rounded-full bg-amber-500/30 border border-amber-400 flex items-center justify-center font-bold text-amber-300 text-sm">
+                            P1
+                        </div>
+                        <h2 id="activePlayerName" class="text-xl font-bold text-white tracking-wide">Player 1</h2>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-xl border border-white/5">
+                    <span class="text-xs text-gray-400 uppercase tracking-wider">Rolls Left:</span>
+                    <div id="rollsLeftContainer" class="flex gap-1.5">
+                        <div class="w-3.5 h-3.5 rounded-full bg-amber-400 shadow-glow"></div>
+                        <div class="w-3.5 h-3.5 rounded-full bg-amber-400 shadow-glow"></div>
+                        <div class="w-3.5 h-3.5 rounded-full bg-amber-400 shadow-glow"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dice Tray (Felt Felt Arena) -->
+            <div class="felt-bg rounded-3xl p-6 sm:p-8 border-4 border-emerald-900/60 shadow-2xl relative overflow-hidden flex flex-col items-center justify-between min-h-[340px]">
+                <!-- Ambient Felt Inner Glow -->
+                <div class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/40 pointer-events-none"></div>
+
+                <!-- Guidance Banner -->
+                <div id="diceInstructionText" class="relative z-10 text-xs sm:text-sm font-medium text-emerald-200/80 bg-black/40 px-4 py-1.5 rounded-full border border-emerald-500/20 text-center mb-4">
+                    Click "Roll Dice" to start your turn
+                </div>
+
+                <!-- 5 Dice Grid -->
+                <div id="diceTray" class="relative z-10 flex flex-wrap justify-center items-center gap-3 sm:gap-4 my-auto py-4">
+                    <!-- Dynamic Dice injected here via JS -->
+                </div>
+
+                <!-- Action Controls Bar -->
+                <div class="relative z-10 w-full mt-6 flex flex-col sm:flex-row items-center gap-3">
+                    <button id="rollBtn" class="btn-gold w-full py-4 rounded-xl font-bold text-lg text-amber-950 uppercase tracking-wider flex items-center justify-center gap-3 shadow-xl">
+                        <i class="fa-solid fa-dice text-2xl"></i>
+                        <span>Roll Dice (3)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Players Overview / Summary Strip -->
+            <div class="glass-panel p-4 rounded-2xl">
+                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Scoreboard Standings</h3>
+                <div id="scoreboardMiniList" class="flex flex-col gap-2">
+                    <!-- Dynamic Player Scores Injected Here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT COLUMN: Interactive Scorecard Grid (lg:col-span-7) -->
+        <section class="lg:col-span-7 flex flex-col gap-4">
+            
+            <!-- Unified Paper Score Sheet Container -->
+            <div class="score-sheet-container p-3 sm:p-5 relative">
+                
+                <div class="flex items-center justify-between pb-3 mb-3 border-b border-white/10 px-2">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-clipboard-list text-amber-400 text-lg"></i>
+                        <h3 class="font-bold text-lg tracking-wider text-amber-200 uppercase font-cinzel">Official Score Sheet</h3>
+                    </div>
+                    <span class="text-xs text-amber-300/80 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
+                        <i class="fa-solid fa-magnifying-glass-plus mr-1"></i> Active player zoomed
+                    </span>
+                </div>
+
+                <!-- Unified Score Table -->
+                <div class="overflow-x-auto">
+                    <div id="unifiedScoreSheet" class="min-w-[500px]">
+                        <!-- Dynamic Multi-Column Score Table Injected Here -->
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    <!-- NEW GAME SETUP MODAL -->
+    <div id="setupModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="glass-panel max-w-lg w-full p-6 sm:p-8 rounded-3xl border border-white/10 shadow-2xl relative flex flex-col gap-6">
+            <div class="text-center">
+                <h2 class="text-3xl font-black font-cinzel text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500">
+                    GAME SETUP
+                </h2>
+                <p class="text-sm text-gray-400 mt-1">Configure players and game mode</p>
+            </div>
+
+            <!-- Mode Selector -->
+            <div>
+                <label class="block text-xs font-semibold uppercase text-gray-300 tracking-wider mb-2">Select Game Mode</label>
+                <div class="grid grid-cols-3 gap-2">
+                    <button type="button" data-mode="solo" class="mode-select-btn active p-3 rounded-xl border border-amber-500/50 bg-amber-500/20 text-amber-300 flex flex-col items-center gap-2 transition-all">
+                        <i class="fa-solid fa-user text-xl"></i>
+                        <span class="text-xs font-bold">Solo Play</span>
+                    </button>
+                    <button type="button" data-mode="pass" class="mode-select-btn p-3 rounded-xl border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 flex flex-col items-center gap-2 transition-all">
+                        <i class="fa-solid fa-users text-xl"></i>
+                        <span class="text-xs font-bold">Pass & Play</span>
+                    </button>
+                    <button type="button" data-mode="ai" class="mode-select-btn p-3 rounded-xl border border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 flex flex-col items-center gap-2 transition-all">
+                        <i class="fa-solid fa-robot text-xl"></i>
+                        <span class="text-xs font-bold">VS Computer</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dynamic Settings Container -->
+            <div id="modeSettingsContainer" class="flex flex-col gap-4">
+                <!-- Content generated dynamically via JS for Player counts or AI Difficulty -->
+            </div>
+
+            <!-- Start Game Button -->
+            <button id="startGameConfirmBtn" class="btn-gold py-4 rounded-xl font-bold text-amber-950 uppercase tracking-wider text-base shadow-xl flex items-center justify-center gap-2">
+                <i class="fa-solid fa-play"></i>
+                <span>Start Game</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- VICTORY / ENDGAME MODAL -->
+    <div id="victoryModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel max-w-md w-full p-6 sm:p-8 rounded-3xl border border-amber-500/30 shadow-2xl text-center flex flex-col gap-6 relative">
+            <div class="w-16 h-16 rounded-full bg-amber-500/20 border border-amber-400 flex items-center justify-center text-amber-400 text-3xl mx-auto shadow-glow">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+
+            <div>
+                <h2 id="victoryTitle" class="text-3xl font-black font-cinzel text-amber-300">Game Over!</h2>
+                <p id="victorySubtitle" class="text-sm text-gray-300 mt-1">Here are the final standings</p>
+            </div>
+
+            <!-- Standings Table -->
+            <div id="victoryStandingsList" class="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
+                <!-- Injected via JS -->
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-2.5">
+                <button id="victoryReviewBtn" class="px-4 py-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-sm"></i>
+                    <span>Review Scores</span>
+                </button>
+                <button id="victoryPlayAgainBtn" class="btn-gold flex-1 py-3.5 rounded-xl font-bold text-amber-950 uppercase text-xs sm:text-sm">
+                    Play Again
+                </button>
+                <button id="victoryCloseBtn" class="px-4 py-3 rounded-xl glass-card hover:bg-white/10 text-gray-300 font-semibold text-xs sm:text-sm">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CATEGORY SCORE REVIEW & ANALYSIS MODAL -->
+    <div id="reviewModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel max-w-2xl w-full p-5 sm:p-6 rounded-3xl border border-amber-500/30 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
+            <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 text-lg">
+                        <i class="fa-solid fa-chart-column"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold font-cinzel text-amber-300">Category Score Analysis</h3>
+                        <p class="text-xs text-gray-400">Detailed score breakdown & performance summary</p>
+                    </div>
+                </div>
+                <button id="closeReviewBtn" class="p-2 text-gray-400 hover:text-white text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Stats Summary Cards -->
+            <div id="reviewStatsCards" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+                <!-- Dynamically generated stats -->
+            </div>
+
+            <!-- Category Breakdown Table -->
+            <div class="overflow-y-auto max-h-[50vh] pr-1">
+                <div id="reviewTableContainer">
+                    <!-- Detailed breakdown table injected here -->
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center pt-2 border-t border-white/10 gap-2">
+                <button id="reviewBackToVictoryBtn" class="px-4 py-2.5 rounded-xl glass-card hover:bg-white/10 text-amber-300 text-xs font-semibold flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Back to Victory</span>
+                </button>
+                <button id="reviewPlayAgainBtn" class="btn-gold px-5 py-2.5 rounded-xl font-bold text-amber-950 text-xs uppercase tracking-wider">
+                    Play Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RULES MODAL -->
+    <div id="rulesModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel max-w-xl w-full p-6 sm:p-8 rounded-3xl border border-white/10 shadow-2xl max-h-[85vh] flex flex-col">
+            <div class="flex items-center justify-between pb-4 border-b border-white/10">
+                <h3 class="text-2xl font-bold font-cinzel text-amber-300 flex items-center gap-2">
+                    <i class="fa-solid fa-book-open"></i> Yahtzee Rules
+                </h3>
+                <button id="closeRulesBtn" class="p-2 text-gray-400 hover:text-white text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="overflow-y-auto text-sm text-gray-300 py-4 flex flex-col gap-4 pr-2">
+                <p><strong>Goal:</strong> Score the most points by rolling 5 dice to make specific combinations over 13 rounds.</p>
+                <div>
+                    <h4 class="font-bold text-amber-200 mb-1">Turn Structure:</h4>
+                    <ul class="list-disc list-inside space-y-1 text-gray-300">
+                        <li>You have up to <strong>3 rolls</strong> per turn.</li>
+                        <li>Click on dice you want to <strong>hold</strong> before rolling again.</li>
+                        <li>Select an available box on your scorecard to record your score before your turn ends.</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-bold text-amber-200 mb-1">Upper Section Bonus:</h4>
+                    <p>If the subtotal of Upper Section scores (Ones through Sixes) is <strong>63 or higher</strong>, you receive a <strong>+35 point bonus</strong>.</p>
+                </div>
+                <div>
+                    <h4 class="font-bold text-amber-200 mb-1">Yahtzee & Bonus / Joker Rules:</h4>
+                    <ul class="list-disc list-inside space-y-1 text-gray-300">
+                        <li>A <strong>Yahtzee</strong> is 5 of a kind (50 pts).</li>
+                        <li>Additional Yahtzees give a <strong>+100 Bonus</strong> each!</li>
+                        <li><strong>Joker Rule:</strong> If you roll a bonus Yahtzee and its Upper category is filled, you can use it as a Joker for Full House (25), Small Straight (30), Large Straight (40), or any open category.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HIGH SCORES MODAL -->
+    <div id="highScoresModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel max-w-md w-full p-6 rounded-3xl border border-white/10 shadow-2xl flex flex-col gap-4">
+            <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                <h3 class="text-xl font-bold font-cinzel text-amber-300 flex items-center gap-2">
+                    <i class="fa-solid fa-trophy"></i> Local Hall of Fame
+                </h3>
+                <button id="closeHighScoresBtn" class="p-2 text-gray-400 hover:text-white text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="highScoresList" class="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+                <!-- High scores injected here -->
+            </div>
+            <button id="clearHighScoresBtn" class="text-xs text-red-400 hover:text-red-300 self-center py-2 underline">
+                Clear Leaderboard History
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Standard categories definition
+        const CATEGORIES = {
+            ones: { id: 'ones', name: 'Ones', section: 'upper', desc: '1s' },
+            twos: { id: 'twos', name: 'Twos', section: 'upper', desc: '3s' },
+            threes: { id: 'threes', name: 'Threes', section: 'upper', desc: '3s' },
+            fours: { id: 'fours', name: 'Fours', section: 'upper', desc: '4s' },
+            fives: { id: 'fives', name: 'Fives', section: 'upper', desc: '5s' },
+            sixes: { id: 'sixes', name: 'Sixes', section: 'upper', desc: '6s' },
+            threeKind: { id: 'threeKind', name: '3 of a Kind', section: 'lower', desc: 'Sum of all dice' },
+            fourKind: { id: 'fourKind', name: '4 of a Kind', section: 'lower', desc: 'Sum of all dice' },
+            fullHouse: { id: 'fullHouse', name: 'Full House', section: 'lower', desc: '25 Pts' },
+            smStraight: { id: 'smStraight', name: 'Small Straight', section: 'lower', desc: '30 Pts' },
+            lgStraight: { id: 'lgStraight', name: 'Large Straight', section: 'lower', desc: '40 Pts' },
+            yahtzee: { id: 'yahtzee', name: 'Yahtzee', section: 'lower', desc: '50 Pts' },
+            chance: { id: 'chance', name: 'Chance', section: 'lower', desc: 'Sum of all dice' }
+        };
+
+        // Pip layout templates for rendering crisp 3D face visuals
+        const PIP_LAYOUTS = {
+            1: [4],
+            2: [0, 8],
+            3: [0, 4, 8],
+            4: [0, 2, 6, 8],
+            5: [0, 2, 4, 6, 8],
+            6: [0, 2, 3, 5, 6, 8]
+        };
+
+        // Main State Store
+        const gameState = {
+            mode: 'solo', // 'solo', 'pass', 'ai'
+            aiDifficulty: 'casual', // 'casual', 'strategic'
+            players: [],
+            currentPlayerIndex: 0,
+            rollsRemaining: 3,
+            dice: [
+                { value: 1, held: false },
+                { value: 2, held: false },
+                { value: 3, held: false },
+                { value: 4, held: false },
+                { value: 5, held: false }
+            ],
+            round: 1,
+            maxRounds: 13,
+            isRolling: false,
+            gameEnded: false
+        };
+
+        // DOM Element Cache
+        const DOM = {
+            diceTray: document.getElementById('diceTray'),
+            rollBtn: document.getElementById('rollBtn'),
+            rollsLeftContainer: document.getElementById('rollsLeftContainer'),
+            diceInstructionText: document.getElementById('diceInstructionText'),
+            activePlayerName: document.getElementById('activePlayerName'),
+            activePlayerAvatar: document.getElementById('activePlayerAvatar'),
+            unifiedScoreSheet: document.getElementById('unifiedScoreSheet'),
+            scoreboardMiniList: document.getElementById('scoreboardMiniList'),
+            setupModal: document.getElementById('setupModal'),
+            modeSettingsContainer: document.getElementById('modeSettingsContainer'),
+            startGameConfirmBtn: document.getElementById('startGameConfirmBtn'),
+            victoryModal: document.getElementById('victoryModal'),
+            victoryTitle: document.getElementById('victoryTitle'),
+            victorySubtitle: document.getElementById('victorySubtitle'),
+            victoryStandingsList: document.getElementById('victoryStandingsList'),
+            victoryReviewBtn: document.getElementById('victoryReviewBtn'),
+            victoryPlayAgainBtn: document.getElementById('victoryPlayAgainBtn'),
+            victoryCloseBtn: document.getElementById('victoryCloseBtn'),
+            reviewModal: document.getElementById('reviewModal'),
+            closeReviewBtn: document.getElementById('closeReviewBtn'),
+            reviewStatsCards: document.getElementById('reviewStatsCards'),
+            reviewTableContainer: document.getElementById('reviewTableContainer'),
+            reviewBackToVictoryBtn: document.getElementById('reviewBackToVictoryBtn'),
+            reviewPlayAgainBtn: document.getElementById('reviewPlayAgainBtn'),
+            rulesModal: document.getElementById('rulesModal'),
+            rulesBtn: document.getElementById('rulesBtn'),
+            closeRulesBtn: document.getElementById('closeRulesBtn'),
+            highScoresModal: document.getElementById('highScoresModal'),
+            highScoresBtn: document.getElementById('highScoresBtn'),
+            closeHighScoresBtn: document.getElementById('closeHighScoresBtn'),
+            highScoresList: document.getElementById('highScoresList'),
+            clearHighScoresBtn: document.getElementById('clearHighScoresBtn'),
+            soundToggleBtn: document.getElementById('soundToggleBtn'),
+            soundIcon: document.getElementById('soundIcon'),
+            newGameBtn: document.getElementById('newGameBtn')
+        };
+
+        /**
+         * CALCULATE SCORECARD TOTALS FOR A PLAYER
+         */
+        function computePlayerTotals(p) {
+            const sc = p.scoreCard || {};
+            const upperCats = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'];
+            let upperSum = 0;
+            upperCats.forEach(c => {
+                if (sc[c] !== null && sc[c] !== undefined) upperSum += sc[c];
+            });
+            const upperBonus = upperSum >= 63 ? 35 : 0;
+            const upperTotal = upperSum + upperBonus;
+
+            const lowerCats = ['threeKind', 'fourKind', 'fullHouse', 'smStraight', 'lgStraight', 'yahtzee', 'chance'];
+            let lowerSum = 0;
+            lowerCats.forEach(c => {
+                if (sc[c] !== null && sc[c] !== undefined) lowerSum += sc[c];
+            });
+
+            const yahtzeeBonusTotal = (p.yahtzeeBonuses || 0) * 100;
+            const lowerTotal = lowerSum + yahtzeeBonusTotal;
+            const grandTotal = upperTotal + lowerTotal;
+
+            return { upperSum, upperBonus, upperTotal, lowerSum, yahtzeeBonusTotal, lowerTotal, grandTotal };
+        }
+
+        /**
+         * CALCULATE CATEGORY SCORE FROM DICE VALUES
+         */
+        function calculateCategoryScore(catId, diceValues, scoreCard) {
+            if (!diceValues || diceValues.length === 0) return 0;
+
+            const sum = diceValues.reduce((a, b) => a + b, 0);
+            const counts = {};
+            diceValues.forEach(v => counts[v] = (counts[v] || 0) + 1);
+            const maxFreq = Math.max(...Object.values(counts));
+            const isFiveOfAKind = maxFreq === 5;
+
+            // Yahtzee Joker Rule check:
+            // If player already scored 50 in Yahtzee AND rolls another 5 of a kind
+            const isYahtzeeBonusJoker = isFiveOfAKind && scoreCard && scoreCard.yahtzee === 50;
+
+            if (['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'].includes(catId)) {
+                const valMap = { ones: 1, twos: 2, threes: 3, fours: 4, fives: 5, sixes: 6 };
+                const targetVal = valMap[catId];
+                return (counts[targetVal] || 0) * targetVal;
+            }
+
+            switch (catId) {
+                case 'threeKind':
+                    return maxFreq >= 3 ? sum : 0;
+                case 'fourKind':
+                    return maxFreq >= 4 ? sum : 0;
+                case 'fullHouse': {
+                    const isFH = Object.values(counts).includes(3) && Object.values(counts).includes(2);
+                    return (isFH || isYahtzeeBonusJoker) ? 25 : 0;
+                }
+                case 'smStraight': {
+                    const hasSm = (
+                        (counts[1] && counts[2] && counts[3] && counts[4]) ||
+                        (counts[2] && counts[3] && counts[4] && counts[5]) ||
+                        (counts[3] && counts[4] && counts[5] && counts[6])
+                    );
+                    return (hasSm || isYahtzeeBonusJoker) ? 30 : 0;
+                }
+                case 'lgStraight': {
+                    const hasLg = (
+                        (counts[1] && counts[2] && counts[3] && counts[4] && counts[5]) ||
+                        (counts[2] && counts[3] && counts[4] && counts[5] && counts[6])
+                    );
+                    return (hasLg || isYahtzeeBonusJoker) ? 40 : 0;
+                }
+                case 'yahtzee':
+                    return isFiveOfAKind ? 50 : 0;
+                case 'chance':
+                    return sum;
+                default:
+                    return 0;
+            }
+        }
+
+        /**
+         * RENDER DICE IN FELT TRAY
+         */
+        function renderDiceTray() {
+            DOM.diceTray.innerHTML = '';
+
+            gameState.dice.forEach((die, index) => {
+                const diceWrapper = document.createElement('div');
+                diceWrapper.className = `dice-container ${die.held ? 'dice-held' : ''}`;
+
+                const dice3d = document.createElement('div');
+                dice3d.className = `dice-3d ${gameState.isRolling && !die.held ? 'dice-rolling' : ''}`;
+
+                const diceFace = document.createElement('div');
+                diceFace.className = 'dice-face';
+
+                const pipIndices = PIP_LAYOUTS[die.value] || [];
+                for (let i = 0; i < 9; i++) {
+                    const pipSlot = document.createElement('div');
+                    if (pipIndices.includes(i)) {
+                        const pip = document.createElement('div');
+                        pip.className = `pip ${die.value === 1 ? 'red-pip' : ''}`;
+                        pipSlot.appendChild(pip);
+                    }
+                    diceFace.appendChild(pipSlot);
+                }
+
+                dice3d.appendChild(diceFace);
+                diceWrapper.appendChild(dice3d);
+
+                diceWrapper.addEventListener('click', () => {
+                    toggleHoldDice(index);
+                });
+
+                DOM.diceTray.appendChild(diceWrapper);
+            });
+
+            updateRollsIndicator();
+        }
+
+        function toggleHoldDice(index) {
+            if (gameState.rollsRemaining === 3 || gameState.isRolling || gameState.gameEnded) return;
+            const activePlayer = gameState.players[gameState.currentPlayerIndex];
+            if (activePlayer && activePlayer.isAI) return;
+
+            gameState.dice[index].held = !gameState.dice[index].held;
+            audio.playToggleHold();
+            renderDiceTray();
+        }
+
+        /**
+         * ROLL UNHELD DICE
+         */
+        function rollDice() {
+            if (gameState.rollsRemaining <= 0 || gameState.isRolling || gameState.gameEnded) return;
+
+            gameState.isRolling = true;
+            audio.playDiceRoll();
+
+            renderDiceTray();
+
+            setTimeout(() => {
+                gameState.dice.forEach(d => {
+                    if (!d.held) {
+                        d.value = Math.floor(Math.random() * 6) + 1;
+                    }
+                });
+
+                gameState.rollsRemaining--;
+                gameState.isRolling = false;
+
+                const counts = {};
+                gameState.dice.forEach(d => counts[d.value] = (counts[d.value] || 0) + 1);
+                if (Object.values(counts).includes(5)) {
+                    audio.playYahtzee();
+                    if (typeof confetti === 'function') {
+                        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+                    }
+                }
+
+                renderDiceTray();
+                renderScorecard();
+            }, 600);
+        }
+
+        function updateRollsIndicator() {
+            DOM.rollsLeftContainer.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                const dot = document.createElement('div');
+                const isActive = i < gameState.rollsRemaining;
+                dot.className = `w-3.5 h-3.5 rounded-full transition-all ${
+                    isActive ? 'bg-amber-400 shadow-glow' : 'bg-gray-700/60'
+                }`;
+                DOM.rollsLeftContainer.appendChild(dot);
+            }
+
+            const isAITurn = gameState.players[gameState.currentPlayerIndex]?.isAI;
+            DOM.rollBtn.disabled = gameState.rollsRemaining === 0 || gameState.isRolling || isAITurn;
+            DOM.rollBtn.innerHTML = `
+                <i class="fa-solid fa-dice text-2xl"></i>
+                <span>Roll Dice (${gameState.rollsRemaining})</span>
+            `;
+
+            if (gameState.rollsRemaining === 3) {
+                DOM.diceInstructionText.textContent = isAITurn ? "Computer is thinking..." : 'Click "Roll Dice" to start your turn';
+            } else if (gameState.rollsRemaining > 0) {
+                DOM.diceInstructionText.textContent = isAITurn ? "Computer is choosing dice..." : 'Click dice to HOLD, then Roll or select a Score';
+            } else {
+                DOM.diceInstructionText.textContent = isAITurn ? "Computer is recording score..." : 'No rolls left - select a box on the scorecard!';
+            }
+        }
+
+        /**
+         * UNIFIED SCORECARD UI RENDERER WITH PLAYER COLUMN ZOOM
+         */
+        function renderScorecard() {
+            const activePlayer = gameState.players[gameState.currentPlayerIndex];
+            const diceValues = gameState.dice.map(d => d.value);
+
+            DOM.activePlayerName.textContent = activePlayer.name;
+            DOM.activePlayerAvatar.textContent = activePlayer.isAI ? 'AI' : `P${gameState.currentPlayerIndex + 1}`;
+
+            // Compute totals for all players ahead of time
+            const playerTotalsList = gameState.players.map(p => computePlayerTotals(p));
+
+            let html = `
+                <table class="w-full text-left border-collapse border-spacing-0">
+                    <thead>
+                        <tr class="border-b border-white/20">
+                            <th class="p-2 sm:p-2.5 text-xs font-bold text-gray-400 uppercase tracking-wider min-w-[140px] sm:min-w-[160px]">
+                                Categories
+                            </th>
+            `;
+
+            // Render Header for Each Player Column
+            gameState.players.forEach((p, pIdx) => {
+                const isActive = pIdx === gameState.currentPlayerIndex;
+                html += `
+                    <th class="p-2 sm:p-2.5 text-center player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                        <div class="flex flex-col items-center justify-center gap-1">
+                            <span class="text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-amber-400' : 'text-gray-400'}">
+                                ${p.isAI ? 'BOT' : `PLAYER ${pIdx + 1}`}
+                            </span>
+                            <span class="font-extrabold ${isActive ? 'text-base sm:text-lg text-amber-200' : 'text-xs sm:text-sm text-gray-300'} truncate max-w-[100px]">
+                                ${p.name}
+                            </span>
+                            ${isActive ? '<span class="text-[9px] bg-amber-400/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-400/30 shadow-glow">TURN</span>' : ''}
+                        </div>
+                    </th>
+                `;
+            });
+
+            html += `</tr></thead><tbody class="divide-y divide-white/5 text-xs sm:text-sm">`;
+
+            // Helper to render section title divider row
+            const renderSectionHeader = (title) => {
+                html += `
+                    <tr class="bg-black/40">
+                        <td colspan="${gameState.players.length + 1}" class="px-2.5 py-1.5 font-bold font-cinzel text-xs text-amber-300 uppercase tracking-wider border-y border-white/10">
+                            ${title}
+                        </td>
+                    </tr>
+                `;
+            };
+
+            // UPPER SECTION CATEGORIES
+            renderSectionHeader('<i class="fa-solid fa-arrow-up-1-9 text-amber-400 mr-1.5"></i> Upper Section');
+
+            const upperCats = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'];
+            upperCats.forEach(catId => {
+                const cat = CATEGORIES[catId];
+                html += `<tr class="hover:bg-white/5 transition-colors">`;
+                html += `
+                    <td class="p-2 sm:p-2.5">
+                        <div class="font-semibold text-gray-200 text-xs sm:text-sm">${cat.name}</div>
+                        <div class="text-[10px] text-gray-400">${cat.desc}</div>
+                    </td>
+                `;
+
+                gameState.players.forEach((p, pIdx) => {
+                    const isActive = pIdx === gameState.currentPlayerIndex;
+                    const isScored = p.scoreCard[catId] !== null;
+                    const scoreVal = p.scoreCard[catId];
+                    const potentialVal = calculateCategoryScore(catId, diceValues, p.scoreCard);
+                    const isSelectable = isActive && !isScored && gameState.rollsRemaining < 3 && !p.isAI && !gameState.gameEnded;
+
+                    html += `
+                        <td class="p-1.5 sm:p-2 text-center align-middle player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                            ${isScored 
+                                ? `<span class="font-extrabold font-cinzel ${isActive ? 'text-base sm:text-lg text-amber-300' : 'text-sm text-gray-300'}">${scoreVal}</span>`
+                                : isSelectable
+                                    ? `<button onclick="selectCategoryScore('${catId}', ${potentialVal})" class="score-slot-btn selectable w-full py-1.5 px-1 rounded-lg text-xs sm:text-sm font-bold text-amber-300">
+                                        +${potentialVal}
+                                       </button>`
+                                    : `<span class="text-xs text-gray-600 font-mono">-</span>`
+                            }
+                        </td>
+                    `;
+                });
+                html += `</tr>`;
+            });
+
+            // UPPER SUBTOTAL ROW
+            html += `<tr class="bg-black/30 font-bold border-t border-white/10">`;
+            html += `<td class="p-2 sm:p-2.5 text-xs text-gray-300">Upper Subtotal (Req. 63)</td>`;
+            gameState.players.forEach((p, pIdx) => {
+                const isActive = pIdx === gameState.currentPlayerIndex;
+                const totals = playerTotalsList[pIdx];
+                html += `
+                    <td class="p-2 text-center player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                        <span class="text-xs ${isActive ? 'text-amber-300 font-extrabold' : 'text-gray-400'}">${totals.upperSum} / 63</span>
+                    </td>
+                `;
+            });
+            html += `</tr>`;
+
+            // UPPER BONUS ROW (+35)
+            html += `<tr class="bg-black/30 font-bold">`;
+            html += `<td class="p-2 sm:p-2.5 text-xs text-gray-300">Upper Bonus (+35)</td>`;
+            gameState.players.forEach((p, pIdx) => {
+                const isActive = pIdx === gameState.currentPlayerIndex;
+                const totals = playerTotalsList[pIdx];
+                html += `
+                    <td class="p-2 text-center player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                        ${totals.upperBonus > 0 
+                            ? `<span class="text-xs font-extrabold text-emerald-400"><i class="fa-solid fa-check mr-0.5"></i> +35</span>`
+                            : `<span class="text-[11px] text-gray-500 font-normal">Pending</span>`
+                        }
+                    </td>
+                `;
+            });
+            html += `</tr>`;
+
+            // LOWER SECTION CATEGORIES
+            renderSectionHeader('<i class="fa-solid fa-star text-amber-400 mr-1.5"></i> Lower Section');
+
+            const lowerCats = ['threeKind', 'fourKind', 'fullHouse', 'smStraight', 'lgStraight', 'yahtzee', 'chance'];
+            lowerCats.forEach(catId => {
+                const cat = CATEGORIES[catId];
+                html += `<tr class="hover:bg-white/5 transition-colors">`;
+                html += `
+                    <td class="p-2 sm:p-2.5">
+                        <div class="font-semibold text-gray-200 text-xs sm:text-sm">${cat.name}</div>
+                        <div class="text-[10px] text-gray-400">${cat.desc}</div>
+                    </td>
+                `;
+
+                gameState.players.forEach((p, pIdx) => {
+                    const isActive = pIdx === gameState.currentPlayerIndex;
+                    const isScored = p.scoreCard[catId] !== null;
+                    const scoreVal = p.scoreCard[catId];
+                    const potentialVal = calculateCategoryScore(catId, diceValues, p.scoreCard);
+                    const isSelectable = isActive && !isScored && gameState.rollsRemaining < 3 && !p.isAI && !gameState.gameEnded;
+
+                    html += `
+                        <td class="p-1.5 sm:p-2 text-center align-middle player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                            ${isScored 
+                                ? `<span class="font-extrabold font-cinzel ${isActive ? 'text-base sm:text-lg text-amber-300' : 'text-sm text-gray-300'}">${scoreVal}</span>`
+                                : isSelectable
+                                    ? `<button onclick="selectCategoryScore('${catId}', ${potentialVal})" class="score-slot-btn selectable w-full py-1.5 px-1 rounded-lg text-xs sm:text-sm font-bold text-amber-300">
+                                        +${potentialVal}
+                                       </button>`
+                                    : `<span class="text-xs text-gray-600 font-mono">-</span>`
+                            }
+                        </td>
+                    `;
+                });
+                html += `</tr>`;
+            });
+
+            // YAHTZEE BONUS COUNTER ROW
+            html += `<tr class="bg-black/30 font-bold border-t border-white/10">`;
+            html += `<td class="p-2 sm:p-2.5 text-xs text-gray-300">Yahtzee Bonus (+100 ea)</td>`;
+            gameState.players.forEach((p, pIdx) => {
+                const isActive = pIdx === gameState.currentPlayerIndex;
+                const totals = playerTotalsList[pIdx];
+                html += `
+                    <td class="p-2 text-center player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                        <span class="text-xs ${p.yahtzeeBonuses > 0 ? 'text-amber-400 font-extrabold' : 'text-gray-500'}">
+                            ${p.yahtzeeBonuses} (${totals.yahtzeeBonusTotal} pts)
+                        </span>
+                    </td>
+                `;
+            });
+            html += `</tr>`;
+
+            // GRAND TOTAL FOOTER ROW
+            html += `<tr class="bg-gradient-to-r from-amber-500/20 via-amber-400/10 to-transparent border-t-2 border-amber-500/40">`;
+            html += `<td class="p-2.5 sm:p-3 font-extrabold font-cinzel text-amber-300 text-sm uppercase">GRAND TOTAL</td>`;
+            gameState.players.forEach((p, pIdx) => {
+                const isActive = pIdx === gameState.currentPlayerIndex;
+                const totals = playerTotalsList[pIdx];
+                html += `
+                    <td class="p-2.5 sm:p-3 text-center player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                        <span class="font-black font-cinzel ${isActive ? 'text-xl sm:text-2xl text-amber-300' : 'text-base sm:text-lg text-gray-200'}">
+                            ${totals.grandTotal}
+                        </span>
+                    </td>
+                `;
+            });
+            html += `</tr>`;
+
+            html += `</tbody></table>`;
+
+            DOM.unifiedScoreSheet.innerHTML = html;
+            renderScoreboardMini();
+        }
+
+        function renderScoreboardMini() {
+            DOM.scoreboardMiniList.innerHTML = '';
+            gameState.players.forEach((p, idx) => {
+                const totals = computePlayerTotals(p);
+                const isActive = idx === gameState.currentPlayerIndex;
+
+                const row = document.createElement('div');
+                row.className = `p-2.5 rounded-xl flex items-center justify-between border transition-all ${
+                    isActive ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/20 border-white/5'
+                }`;
+
+                row.innerHTML = `
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-6 h-6 rounded-full ${isActive ? 'bg-amber-500 text-amber-950' : 'bg-gray-800 text-gray-400'} text-xs font-bold flex items-center justify-center">
+                            ${p.isAI ? 'AI' : idx + 1}
+                        </div>
+                        <span class="text-xs font-semibold ${isActive ? 'text-amber-200' : 'text-gray-300'}">${p.name}</span>
+                    </div>
+                    <span class="text-sm font-bold font-cinzel text-amber-400">${totals.grandTotal} pts</span>
+                `;
+
+                DOM.scoreboardMiniList.appendChild(row);
+            });
+        }
+
+        /**
+         * TURN SELECTION & TURN PROGRESSION
+         */
+        function selectCategoryScore(catId, points) {
+            const activePlayer = gameState.players[gameState.currentPlayerIndex];
+            
+            // Check for Bonus Yahtzee tracking (+100 pts)
+            const diceValues = gameState.dice.map(d => d.value);
+            const counts = {};
+            diceValues.forEach(v => counts[v] = (counts[v] || 0) + 1);
+            if (Object.values(counts).includes(5) && activePlayer.scoreCard.yahtzee === 50) {
+                activePlayer.yahtzeeBonuses = (activePlayer.yahtzeeBonuses || 0) + 1;
+            }
+
+            activePlayer.scoreCard[catId] = points;
+            audio.playScoreSelect();
+
+            advanceTurn();
+        }
+
+        function advanceTurn() {
+            // Reset dice hold states
+            gameState.dice.forEach(d => {
+                d.held = false;
+                d.value = 1;
+            });
+            gameState.rollsRemaining = 3;
+
+            // Advance player index
+            gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+
+            // Round increments after all players take turn
+            if (gameState.currentPlayerIndex === 0) {
+                gameState.round++;
+            }
+
+            // Check Game Over Condition
+            if (gameState.round > gameState.maxRounds) {
+                endGame();
+                return;
+            }
+
+            renderDiceTray();
+            renderScorecard();
+
+            // Trigger AI Turn if Computer's Turn
+            const nextPlayer = gameState.players[gameState.currentPlayerIndex];
+            if (nextPlayer.isAI) {
+                executeAITurn();
+            }
+        }
+
+        /**
+         * ARTIFICIAL INTELLIGENCE OPPONENT LOGIC (Easy, Medium, Hard)
+         */
+        function executeAITurn() {
+            const aiPlayer = gameState.players[gameState.currentPlayerIndex];
+            const difficulty = gameState.aiDifficulty;
+
+            const aiDecisionStep = () => {
+                if (gameState.rollsRemaining === 3) {
+                    rollDice();
+                    setTimeout(aiDecisionStep, 1000);
+                    return;
+                }
+
+                const diceValues = gameState.dice.map(d => d.value);
+
+                if (gameState.rollsRemaining > 0) {
+                    // Decide which dice to hold based on difficulty
+                    const holdMap = evaluateAIHolds(diceValues, aiPlayer, difficulty);
+                    gameState.dice.forEach((d, idx) => {
+                        d.held = holdMap[idx];
+                    });
+                    renderDiceTray();
+
+                    // Decide whether to roll again or score now
+                    if (shouldAIRollAgain(diceValues, aiPlayer, difficulty)) {
+                        rollDice();
+                        setTimeout(aiDecisionStep, 1000);
+                        return;
+                    }
+                }
+
+                // AI chooses best available score category
+                const chosenCat = evaluateAICategoryChoice(diceValues, aiPlayer, difficulty);
+                const score = calculateCategoryScore(chosenCat, diceValues, aiPlayer.scoreCard);
+                
+                setTimeout(() => {
+                    selectCategoryScore(chosenCat, score);
+                }, 800);
+            };
+
+            setTimeout(aiDecisionStep, 800);
+        }
+
+        function evaluateAIHolds(diceValues, aiPlayer, difficulty) {
+            const holds = [false, false, false, false, false];
+            const counts = {};
+            diceValues.forEach(v => counts[v] = (counts[v] || 0) + 1);
+
+            if (difficulty === 'easy') {
+                // Easy AI randomly holds matching dice
+                const maxCountVal = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+                diceValues.forEach((v, i) => {
+                    if (v == maxCountVal && counts[v] > 1) holds[i] = true;
+                });
+                return holds;
+            }
+
+            // Medium & Hard Logic
+            const maxFreq = Math.max(...Object.values(counts));
+            const bestVal = Object.keys(counts).find(k => counts[k] === maxFreq);
+
+            // Hold pairs, trips, quads
+            if (maxFreq >= 2) {
+                diceValues.forEach((v, i) => {
+                    if (v == bestVal) holds[i] = true;
+                });
+            }
+
+            // Check for straight opportunities in Hard mode
+            if (difficulty === 'hard' && maxFreq < 3) {
+                const openStraight = !aiPlayer.scoreCard.smStraight || !aiPlayer.scoreCard.lgStraight;
+                if (openStraight) {
+                    const uniqueVals = [...new Set(diceValues)].sort();
+                    // Hold unique sequence
+                    uniqueVals.forEach((val) => {
+                        const idx = diceValues.indexOf(val);
+                        if (idx !== -1) holds[idx] = true;
+                    });
+                }
+            }
+
+            return holds;
+        }
+
+        function shouldAIRollAgain(diceValues, aiPlayer, difficulty) {
+            if (gameState.rollsRemaining <= 0) return false;
+            
+            const counts = {};
+            diceValues.forEach(v => counts[v] = (counts[v] || 0) + 1);
+            
+            // If already got Yahtzee, stop rolling unless yahtzee is already filled
+            if (Object.values(counts).includes(5) && aiPlayer.scoreCard.yahtzee === null) {
+                return false;
+            }
+
+            return true;
+        }
+
+        function evaluateAICategoryChoice(diceValues, aiPlayer, difficulty) {
+            const openCats = Object.keys(CATEGORIES).filter(catId => aiPlayer.scoreCard[catId] === null);
+            
+            let bestCat = openCats[0];
+            let maxScore = -1;
+
+            openCats.forEach(catId => {
+                const score = calculateCategoryScore(catId, diceValues, aiPlayer.scoreCard);
+                // Weighted valuation for strategic categories
+                let weight = score;
+
+                if (difficulty === 'hard') {
+                    if (catId === 'yahtzee' && score === 50) weight += 100;
+                    if (['ones', 'twos'].includes(catId) && score < 3) weight -= 5; // Sacrifice low upper scores over burning combos
+                }
+
+                if (weight > maxScore) {
+                    maxScore = weight;
+                    bestCat = catId;
+                }
+            });
+
+            return bestCat;
+        }
+
+        /**
+         * ENDGAME & HIGH SCORES STORAGE
+         */
+        function endGame() {
+            gameState.gameEnded = true;
+
+            // Calculate final standings
+            const standings = gameState.players.map(p => {
+                const totals = computePlayerTotals(p);
+                return { name: p.name, score: totals.grandTotal, isAI: p.isAI };
+            }).sort((a, b) => b.score - a.score);
+
+            const winner = standings[0];
+
+            // Save to Local High Scores
+            saveHighScore(winner.name, winner.score);
+
+            // Trigger Victory Modal & Celebratory Confetti
+            if (gameState.players.length === 1) {
+                DOM.victoryTitle.textContent = 'Game Complete!';
+            } else if (winner.name.trim().toLowerCase() === 'you') {
+                DOM.victoryTitle.textContent = 'You Win!';
+            } else {
+                DOM.victoryTitle.textContent = `${winner.name} Wins!`;
+            }
+            DOM.victorySubtitle.textContent = `Winning Score: ${winner.score} points`;
+
+            DOM.victoryStandingsList.innerHTML = '';
+            standings.forEach((s, idx) => {
+                const row = document.createElement('div');
+                row.className = `p-3 rounded-xl flex items-center justify-between border ${
+                    idx === 0 ? 'bg-amber-500/20 border-amber-400 text-amber-200' : 'bg-white/5 border-white/5 text-gray-300'
+                }`;
+                row.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <span class="font-bold font-cinzel text-base">${idx + 1}.</span>
+                        <span class="font-semibold text-sm">${s.name}</span>
+                    </div>
+                    <span class="font-extrabold font-cinzel text-lg">${s.score} pts</span>
+                `;
+                DOM.victoryStandingsList.appendChild(row);
+            });
+
+            DOM.victoryModal.classList.remove('hidden');
+            confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+        }
+
+        function saveHighScore(name, score) {
+            try {
+                let scores = JSON.parse(localStorage.getItem('yahtzee_deluxe_scores') || '[]');
+                scores.push({ name, score, date: new Date().toLocaleDateString() });
+                scores.sort((a, b) => b.score - a.score);
+                scores = scores.slice(0, 10); // Keep top 10
+                localStorage.setItem('yahtzee_deluxe_scores', JSON.stringify(scores));
+            } catch (e) {
+                console.error("Storage error:", e);
+            }
+        }
+
+        function renderHighScoresList() {
+            DOM.highScoresList.innerHTML = '';
+            let scores = [];
+            try {
+                scores = JSON.parse(localStorage.getItem('yahtzee_deluxe_scores') || '[]');
+            } catch (e) {}
+
+            if (scores.length === 0) {
+                DOM.highScoresList.innerHTML = `<div class="text-center text-sm text-gray-400 py-6">No high scores recorded yet!</div>`;
+                return;
+            }
+
+            scores.forEach((s, idx) => {
+                const item = document.createElement('div');
+                item.className = 'p-3 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between text-sm';
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <span class="font-bold font-cinzel text-amber-400 text-base">#${idx + 1}</span>
+                        <div>
+                            <div class="font-bold text-gray-200">${s.name}</div>
+                            <div class="text-xs text-gray-500">${s.date}</div>
+                        </div>
+                    </div>
+                    <span class="font-extrabold font-cinzel text-amber-300 text-base">${s.score} pts</span>
+                `;
+                DOM.highScoresList.appendChild(item);
+            });
+        }
+
+        /**
+         * EVENT LISTENERS & SETUP CONFIGURATION
+         */
+        function setupEventListeners() {
+            // Mode Select Toggle Buttons in Setup Modal
+            document.querySelectorAll('.mode-select-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.mode-select-btn').forEach(b => {
+                        b.classList.remove('active', 'border-amber-500/50', 'bg-amber-500/20', 'text-amber-300');
+                        b.classList.add('border-white/10', 'bg-white/5', 'text-gray-400');
+                    });
+
+                    const target = e.currentTarget;
+                    target.classList.add('active', 'border-amber-500/50', 'bg-amber-500/20', 'text-amber-300');
+                    target.classList.remove('border-white/10', 'bg-white/5', 'text-gray-400');
+
+                    gameState.mode = target.getAttribute('data-mode');
+                    renderModeSettings();
+                });
+            });
+
+            // Start Game Confirm
+            DOM.startGameConfirmBtn.addEventListener('click', () => {
+                initGameFromSettings();
+                DOM.setupModal.classList.add('hidden');
+            });
+
+            // Roll Dice Action
+            DOM.rollBtn.addEventListener('click', () => {
+                rollDice();
+            });
+
+            // Sound Toggle Button
+            DOM.soundToggleBtn.addEventListener('click', () => {
+                audio.soundEnabled = !audio.soundEnabled;
+                DOM.soundIcon.className = audio.soundEnabled ? 'fa-solid fa-volume-high text-lg' : 'fa-solid fa-volume-xmark text-lg text-red-400';
+            });
+
+            // Navigation Modals Toggles
+            DOM.newGameBtn.addEventListener('click', () => {
+                DOM.setupModal.classList.remove('hidden');
+            });
+
+            DOM.rulesBtn.addEventListener('click', () => DOM.rulesModal.classList.remove('hidden'));
+            DOM.closeRulesBtn.addEventListener('click', () => DOM.rulesModal.classList.add('hidden'));
+
+            DOM.highScoresBtn.addEventListener('click', () => {
+                renderHighScoresList();
+                DOM.highScoresModal.classList.remove('hidden');
+            });
+            DOM.closeHighScoresBtn.addEventListener('click', () => DOM.highScoresModal.classList.add('hidden'));
+
+            DOM.clearHighScoresBtn.addEventListener('click', () => {
+                localStorage.removeItem('yahtzee_deluxe_scores');
+                renderHighScoresList();
+            });
+
+            DOM.victoryPlayAgainBtn.addEventListener('click', () => {
+                DOM.victoryModal.classList.add('hidden');
+                DOM.setupModal.classList.remove('hidden');
+            });
+
+            DOM.victoryCloseBtn.addEventListener('click', () => {
+                DOM.victoryModal.classList.add('hidden');
+            });
+
+            // Review Score Actions
+            DOM.victoryReviewBtn.addEventListener('click', () => {
+                DOM.victoryModal.classList.add('hidden');
+                renderScoreReview();
+                DOM.reviewModal.classList.remove('hidden');
+            });
+
+            DOM.closeReviewBtn.addEventListener('click', () => {
+                DOM.reviewModal.classList.add('hidden');
+            });
+
+            DOM.reviewBackToVictoryBtn.addEventListener('click', () => {
+                DOM.reviewModal.classList.add('hidden');
+                DOM.victoryModal.classList.remove('hidden');
+            });
+
+            DOM.reviewPlayAgainBtn.addEventListener('click', () => {
+                DOM.reviewModal.classList.add('hidden');
+                DOM.setupModal.classList.remove('hidden');
+            });
+        }
+
+        /**
+         * RENDER DETAILED SCORE REVIEW & ANALYSIS
+         */
+        function renderScoreReview() {
+            // Stats summary calculation for Player 1 / Main User
+            const p1 = gameState.players[0];
+            const p1Totals = computePlayerTotals(p1);
+
+            let zeroCount = 0;
+            let bestCatName = 'None';
+            let bestCatVal = -1;
+
+            Object.entries(p1.scoreCard).forEach(([catId, val]) => {
+                if (val === 0) zeroCount++;
+                if (val !== null && val > bestCatVal) {
+                    bestCatVal = val;
+                    bestCatName = CATEGORIES[catId]?.name || catId;
+                }
+            });
+
+            DOM.reviewStatsCards.innerHTML = `
+                <div class="p-3 rounded-2xl bg-white/5 border border-white/10 flex flex-col justify-center">
+                    <span class="text-[10px] uppercase font-bold text-gray-400">Grand Total</span>
+                    <span class="text-xl font-extrabold font-cinzel text-amber-300 mt-0.5">${p1Totals.grandTotal}</span>
+                </div>
+                <div class="p-3 rounded-2xl bg-white/5 border border-white/10 flex flex-col justify-center">
+                    <span class="text-[10px] uppercase font-bold text-gray-400">Upper Bonus</span>
+                    <span class="text-sm font-bold ${p1Totals.upperBonus > 0 ? 'text-emerald-400' : 'text-gray-400'} mt-1">
+                        ${p1Totals.upperBonus > 0 ? '<i class="fa-solid fa-circle-check mr-1"></i>+35 Achieved' : 'Missed (Req. 63)'}
+                    </span>
+                </div>
+                <div class="p-3 rounded-2xl bg-white/5 border border-white/10 flex flex-col justify-center">
+                    <span class="text-[10px] uppercase font-bold text-gray-400">Scratched (0 pts)</span>
+                    <span class="text-xl font-extrabold ${zeroCount > 0 ? 'text-rose-400' : 'text-emerald-400'} mt-0.5">${zeroCount} ${zeroCount === 1 ? 'box' : 'boxes'}</span>
+                </div>
+                <div class="p-3 rounded-2xl bg-white/5 border border-white/10 flex flex-col justify-center">
+                    <span class="text-[10px] uppercase font-bold text-gray-400">Top Category</span>
+                    <span class="text-xs font-bold text-amber-200 mt-1 truncate">${bestCatName} (${bestCatVal} pts)</span>
+                </div>
+            `;
+
+            // Build Comprehensive Review Table
+            let tableHtml = `
+                <table class="w-full text-left border-collapse text-xs sm:text-sm">
+                    <thead>
+                        <tr class="border-b border-white/20 text-gray-400 uppercase text-[10px] font-bold">
+                            <th class="p-2 sm:p-2.5">Category</th>
+            `;
+
+            gameState.players.forEach(p => {
+                tableHtml += `<th class="p-2 sm:p-2.5 text-center">${p.name}</th>`;
+            });
+
+            tableHtml += `</tr></thead><tbody class="divide-y divide-white/5">`;
+
+            const catGroup = (title, catIds) => {
+                let groupHtml = `
+                    <tr class="bg-black/40">
+                        <td colspan="${gameState.players.length + 1}" class="px-2.5 py-1.5 font-bold font-cinzel text-xs text-amber-300 uppercase tracking-wider">
+                            ${title}
+                        </td>
+                    </tr>
+                `;
+
+                catIds.forEach(catId => {
+                    const cat = CATEGORIES[catId];
+                    groupHtml += `<tr class="hover:bg-white/5 transition-colors">`;
+                    groupHtml += `
+                        <td class="p-2 sm:p-2.5 font-semibold text-gray-200">
+                            <div>${cat.name}</div>
+                            <div class="text-[10px] text-gray-400 font-normal">${cat.desc}</div>
+                        </td>
+                    `;
+
+                    gameState.players.forEach(p => {
+                        const val = p.scoreCard[catId];
+                        let badgeHtml = '';
+
+                        if (val === 0) {
+                            badgeHtml = `<span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">0 (Scratched)</span>`;
+                        } else if (val !== null) {
+                            if (catId === 'yahtzee' && val === 50) {
+                                badgeHtml = `<span class="font-bold text-amber-300 font-cinzel text-base">50 <i class="fa-solid fa-crown text-xs text-amber-400 ml-1"></i></span>`;
+                            } else if (val >= 25 && ['fullHouse', 'smStraight', 'lgStraight'].includes(catId)) {
+                                badgeHtml = `<span class="font-bold text-emerald-300 font-cinzel">${val}</span>`;
+                            } else {
+                                badgeHtml = `<span class="font-bold text-gray-200">${val}</span>`;
+                            }
+                        } else {
+                            badgeHtml = `<span class="text-gray-500">-</span>`;
+                        }
+
+                        groupHtml += `<td class="p-2 text-center align-middle">${badgeHtml}</td>`;
+                    });
+
+                    groupHtml += `</tr>`;
+                });
+
+                return groupHtml;
+            };
+
+            // Render Upper Categories
+            tableHtml += catGroup('Upper Section', ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes']);
+            
+            // Upper Bonus Summary Row
+            tableHtml += `<tr class="bg-black/30 font-bold"><td class="p-2 sm:p-2.5 text-xs text-gray-300">Upper Bonus (+35)</td>`;
+            gameState.players.forEach(p => {
+                const totals = computePlayerTotals(p);
+                tableHtml += `<td class="p-2 text-center text-xs ${totals.upperBonus > 0 ? 'text-emerald-400 font-extrabold' : 'text-gray-500'}">${totals.upperBonus > 0 ? '+35' : '0'}</td>`;
+            });
+            tableHtml += `</tr>`;
+
+            // Render Lower Categories
+            tableHtml += catGroup('Lower Section', ['threeKind', 'fourKind', 'fullHouse', 'smStraight', 'lgStraight', 'yahtzee', 'chance']);
+
+            // Yahtzee Bonus Row
+            tableHtml += `<tr class="bg-black/30 font-bold"><td class="p-2 sm:p-2.5 text-xs text-gray-300">Yahtzee Bonus (+100 ea)</td>`;
+            gameState.players.forEach(p => {
+                const totals = computePlayerTotals(p);
+                tableHtml += `<td class="p-2 text-center text-xs ${totals.yahtzeeBonusTotal > 0 ? 'text-amber-400 font-extrabold' : 'text-gray-500'}">+${totals.yahtzeeBonusTotal} (${p.yahtzeeBonuses || 0})</td>`;
+            });
+            tableHtml += `</tr>`;
+
+            // Final Grand Total Row
+            tableHtml += `<tr class="bg-amber-500/10 font-bold border-t-2 border-amber-500/30"><td class="p-2.5 sm:p-3 font-cinzel text-amber-300 text-sm">TOTAL SCORE</td>`;
+            gameState.players.forEach(p => {
+                const totals = computePlayerTotals(p);
+                tableHtml += `<td class="p-2.5 sm:p-3 text-center font-cinzel text-lg font-black text-amber-200">${totals.grandTotal}</td>`;
+            });
+            tableHtml += `</tr>`;
+
+            tableHtml += `</tbody></table>`;
+            DOM.reviewTableContainer.innerHTML = tableHtml;
+        }
+
+        function renderModeSettings() {
+            DOM.modeSettingsContainer.innerHTML = '';
+
+            if (gameState.mode === 'solo') {
+                DOM.modeSettingsContainer.innerHTML = `
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-gray-300 tracking-wider mb-2">Player Name</label>
+                        <input type="text" id="soloPlayerName" value="Player 1" class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white font-semibold focus:outline-none focus:border-amber-400">
+                    </div>
+                `;
+            } else if (gameState.mode === 'pass') {
+                DOM.modeSettingsContainer.innerHTML = `
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-gray-300 tracking-wider mb-2">Number of Players</label>
+                        <select id="passPlayerCount" class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white font-semibold focus:outline-none focus:border-amber-400">
+                            <option value="2">2 Players</option>
+                            <option value="3">3 Players</option>
+                            <option value="4">4 Players</option>
+                        </select>
+                    </div>
+                `;
+            } else if (gameState.mode === 'ai') {
+                DOM.modeSettingsContainer.innerHTML = `
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-gray-300 tracking-wider mb-2">AI Difficulty</label>
+                        <select id="aiDifficultySelect" class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white font-semibold focus:outline-none focus:border-amber-400">
+                            <option value="casual" selected>Casual (Balanced)</option>
+                            <option value="strategic">Strategic (Expert)</option>
+                        </select>
+                    </div>
+                `;
+            }
+        }
+
+        function createBlankScorecard() {
+            const card = {};
+            Object.keys(CATEGORIES).forEach(cat => {
+                card[cat] = null;
+            });
+            return card;
+        }
+
+        function initGameFromSettings() {
+            gameState.players = [];
+            gameState.currentPlayerIndex = 0;
+            gameState.round = 1;
+            gameState.gameEnded = false;
+            gameState.rollsRemaining = 3;
+            gameState.dice = Array.from({ length: 5 }, () => ({ value: 1, held: false }));
+
+            if (gameState.mode === 'solo') {
+                const pName = document.getElementById('soloPlayerName')?.value || 'Player 1';
+                gameState.players.push({ name: pName, isAI: false, scoreCard: createBlankScorecard(), yahtzeeBonuses: 0 });
+            } else if (gameState.mode === 'pass') {
+                const count = parseInt(document.getElementById('passPlayerCount')?.value || '2');
+                for (let i = 1; i <= count; i++) {
+                    gameState.players.push({ name: `Player ${i}`, isAI: false, scoreCard: createBlankScorecard(), yahtzeeBonuses: 0 });
+                }
+            } else if (gameState.mode === 'ai') {
+                const diff = document.getElementById('aiDifficultySelect')?.value || 'casual';
+                gameState.aiDifficulty = diff;
+                gameState.players.push({ name: 'You', isAI: false, scoreCard: createBlankScorecard(), yahtzeeBonuses: 0 });
+                gameState.players.push({ name: `AI (${diff.toUpperCase()})`, isAI: true, scoreCard: createBlankScorecard(), yahtzeeBonuses: 0 });
+            }
+
+            renderDiceTray();
+            renderScorecard();
+        }
+
+        // Initialize Application
+        window.onload = function() {
+            setupEventListeners();
+            renderModeSettings();
+            initGameFromSettings();
+        };
+    </script>
+</body>
+</html>
