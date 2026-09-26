@@ -336,7 +336,7 @@
             </button>
             <button id="highScoresBtn" class="p-2.5 rounded-lg glass-card hover:bg-white/10 text-amber-400 transition-colors flex items-center gap-2">
                 <i class="fa-solid fa-trophy text-lg"></i>
-                <span class="hidden sm:inline text-sm font-medium">High Scores</span>
+                <span class="hidden sm:inline text-sm font-medium">Hall of Fame</span>
             </button>
             <button id="newGameBtn" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-all shadow-lg flex items-center gap-2">
                 <i class="fa-solid fa-plus"></i>
@@ -584,18 +584,21 @@
         </div>
     </div>
 
-    <!-- HIGH SCORES MODAL -->
+    <!-- HIGH SCORES / HALL OF FAME MODAL -->
     <div id="highScoresModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
-        <div class="glass-panel max-w-md w-full p-6 rounded-3xl border border-white/10 shadow-2xl flex flex-col gap-4">
+        <div class="glass-panel max-w-lg w-full p-6 rounded-3xl border border-white/10 shadow-2xl flex flex-col gap-4">
             <div class="flex items-center justify-between pb-3 border-b border-white/10">
-                <h3 class="text-xl font-bold font-cinzel text-amber-300 flex items-center gap-2">
-                    <i class="fa-solid fa-trophy"></i> Local Hall of Fame
-                </h3>
+                <div>
+                    <h3 class="text-xl font-bold font-cinzel text-amber-300 flex items-center gap-2">
+                        <i class="fa-solid fa-trophy"></i> Hall of Fame
+                    </h3>
+                    <p class="text-xs text-gray-400 mt-0.5">Click any record to inspect complete scorecard details</p>
+                </div>
                 <button id="closeHighScoresBtn" class="p-2 text-gray-400 hover:text-white text-xl">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
-            <div id="highScoresList" class="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+            <div id="highScoresList" class="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
                 <!-- High scores injected here -->
             </div>
             <button id="clearHighScoresBtn" class="text-xs text-red-400 hover:text-red-300 self-center py-2 underline">
@@ -604,11 +607,48 @@
         </div>
     </div>
 
+    <!-- HALL OF FAME RECORD DETAILS MODAL -->
+    <div id="scoreDetailModal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel max-w-xl w-full p-5 sm:p-6 rounded-3xl border border-amber-500/30 shadow-2xl flex flex-col gap-4 max-h-[90vh]">
+            <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 text-lg">
+                        <i class="fa-solid fa-receipt"></i>
+                    </div>
+                    <div>
+                        <h3 id="detailPlayerName" class="text-xl font-bold font-cinzel text-amber-300">Player Score Details</h3>
+                        <p id="detailTimestamp" class="text-xs text-gray-400">Achieved on --</p>
+                    </div>
+                </div>
+                <button id="closeScoreDetailBtn" class="p-2 text-gray-400 hover:text-white text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div id="detailSettingsBanner" class="bg-black/30 p-2.5 rounded-xl border border-white/5 text-xs text-amber-200/90 flex flex-wrap justify-between items-center gap-2">
+                <!-- Settings summary injected here -->
+            </div>
+
+            <!-- Scorecard Category Breakdown List -->
+            <div class="overflow-y-auto max-h-[55vh] pr-1">
+                <div id="detailTableContainer">
+                    <!-- Detailed breakdown injected here -->
+                </div>
+            </div>
+
+            <div class="flex justify-end items-center pt-2 border-t border-white/10">
+                <button id="closeScoreDetailFooterBtn" class="px-5 py-2.5 rounded-xl glass-card hover:bg-white/10 text-gray-300 text-xs font-semibold">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Standard categories definition
         const CATEGORIES = {
             ones: { id: 'ones', name: 'Ones', section: 'upper', desc: '1s' },
-            twos: { id: 'twos', name: 'Twos', section: 'upper', desc: '3s' },
+            twos: { id: 'twos', name: 'Twos', section: 'upper', desc: '2s' },
             threes: { id: 'threes', name: 'Threes', section: 'upper', desc: '3s' },
             fours: { id: 'fours', name: 'Fours', section: 'upper', desc: '4s' },
             fives: { id: 'fives', name: 'Fives', section: 'upper', desc: '5s' },
@@ -686,6 +726,13 @@
             closeHighScoresBtn: document.getElementById('closeHighScoresBtn'),
             highScoresList: document.getElementById('highScoresList'),
             clearHighScoresBtn: document.getElementById('clearHighScoresBtn'),
+            scoreDetailModal: document.getElementById('scoreDetailModal'),
+            closeScoreDetailBtn: document.getElementById('closeScoreDetailBtn'),
+            closeScoreDetailFooterBtn: document.getElementById('closeScoreDetailFooterBtn'),
+            detailPlayerName: document.getElementById('detailPlayerName'),
+            detailTimestamp: document.getElementById('detailTimestamp'),
+            detailSettingsBanner: document.getElementById('detailSettingsBanner'),
+            detailTableContainer: document.getElementById('detailTableContainer'),
             soundToggleBtn: document.getElementById('soundToggleBtn'),
             soundIcon: document.getElementById('soundIcon'),
             newGameBtn: document.getElementById('newGameBtn')
@@ -1290,13 +1337,43 @@
             // Calculate final standings
             const standings = gameState.players.map(p => {
                 const totals = computePlayerTotals(p);
-                return { name: p.name, score: totals.grandTotal, isAI: p.isAI };
+                return { 
+                    name: p.name, 
+                    score: totals.grandTotal, 
+                    isAI: p.isAI,
+                    playerObj: p
+                };
             }).sort((a, b) => b.score - a.score);
 
             const winner = standings[0];
 
-            // Save to Local High Scores
-            saveHighScore(winner.name, winner.score);
+            // Save ALL human player scores to Hall of Fame with full details
+            const now = new Date();
+            const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            let gameModeLabel = 'Solo Play';
+            if (gameState.mode === 'pass') {
+                gameModeLabel = `Pass & Play (${gameState.players.length} Players)`;
+            } else if (gameState.mode === 'ai') {
+                gameModeLabel = `VS Computer (${gameState.aiDifficulty.toUpperCase()})`;
+            }
+
+            gameState.players.forEach(p => {
+                if (!p.isAI) {
+                    const totals = computePlayerTotals(p);
+                    saveHighScore({
+                        id: 'score_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                        name: p.name,
+                        score: totals.grandTotal,
+                        date: timeString,
+                        timestamp: now.getTime(),
+                        mode: gameModeLabel,
+                        scoreCard: { ...p.scoreCard },
+                        yahtzeeBonuses: p.yahtzeeBonuses || 0,
+                        totals: totals
+                    });
+                }
+            });
 
             // Trigger Victory Modal & Celebratory Confetti
             if (gameState.players.length === 1) {
@@ -1315,7 +1392,7 @@
                 row.innerHTML = `
                     <div class="flex items-center gap-3">
                         <span class="font-bold font-cinzel text-base">${idx + 1}.</span>
-                        <span class="font-semibold text-sm">${s.name}</span>
+                        <span class="font-semibold text-sm">${s.name} ${s.isAI ? '(AI)' : ''}</span>
                     </div>
                     <span class="font-extrabold font-cinzel text-lg">${s.score} pts</span>
                 `;
@@ -1326,12 +1403,12 @@
             confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
         }
 
-        function saveHighScore(name, score) {
+        function saveHighScore(scoreEntry) {
             try {
                 let scores = JSON.parse(localStorage.getItem('yahtzee_deluxe_scores') || '[]');
-                scores.push({ name, score, date: new Date().toLocaleDateString() });
+                scores.push(scoreEntry);
                 scores.sort((a, b) => b.score - a.score);
-                scores = scores.slice(0, 10); // Keep top 10
+                scores = scores.slice(0, 30); // Keep top 30 human achievements
                 localStorage.setItem('yahtzee_deluxe_scores', JSON.stringify(scores));
             } catch (e) {
                 console.error("Storage error:", e);
@@ -1346,25 +1423,119 @@
             } catch (e) {}
 
             if (scores.length === 0) {
-                DOM.highScoresList.innerHTML = `<div class="text-center text-sm text-gray-400 py-6">No high scores recorded yet!</div>`;
+                DOM.highScoresList.innerHTML = `<div class="text-center text-sm text-gray-400 py-6">No scores recorded yet! Complete a game to enter the Hall of Fame.</div>`;
                 return;
             }
 
             scores.forEach((s, idx) => {
                 const item = document.createElement('div');
-                item.className = 'p-3 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between text-sm';
+                item.className = 'p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-amber-500/40 cursor-pointer flex items-center justify-between text-sm transition-all group';
+                
                 item.innerHTML = `
                     <div class="flex items-center gap-3">
-                        <span class="font-bold font-cinzel text-amber-400 text-base">#${idx + 1}</span>
+                        <span class="font-bold font-cinzel text-amber-400 text-base min-w-[24px]">#${idx + 1}</span>
                         <div>
-                            <div class="font-bold text-gray-200">${s.name}</div>
-                            <div class="text-xs text-gray-500">${s.date}</div>
+                            <div class="font-bold text-gray-200 group-hover:text-amber-300 transition-colors flex items-center gap-2">
+                                <span>${s.name}</span>
+                                ${s.mode ? `<span class="text-[10px] font-normal px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">${s.mode}</span>` : ''}
+                            </div>
+                            <div class="text-xs text-gray-500">${s.date || 'Previous session'}</div>
                         </div>
                     </div>
-                    <span class="font-extrabold font-cinzel text-amber-300 text-base">${s.score} pts</span>
+                    <div class="flex items-center gap-2">
+                        <span class="font-extrabold font-cinzel text-amber-300 text-base">${s.score} pts</span>
+                        <i class="fa-solid fa-chevron-right text-gray-500 text-xs group-hover:text-amber-400 transition-colors"></i>
+                    </div>
                 `;
+
+                item.addEventListener('click', () => {
+                    openScoreDetailModal(s);
+                });
+
                 DOM.highScoresList.appendChild(item);
             });
+        }
+
+        function openScoreDetailModal(scoreRecord) {
+            DOM.detailPlayerName.textContent = `${scoreRecord.name}'s Scorecard`;
+            DOM.detailTimestamp.textContent = `Recorded on ${scoreRecord.date || 'Unknown Date'}`;
+            DOM.detailSettingsBanner.innerHTML = `
+                <span><i class="fa-solid fa-gamepad mr-1 text-amber-400"></i> Mode: <strong>${scoreRecord.mode || 'Standard Game'}</strong></span>
+                <span><i class="fa-solid fa-award mr-1 text-amber-400"></i> Grand Total: <strong>${scoreRecord.score} Pts</strong></span>
+            `;
+
+            const sc = scoreRecord.scoreCard || {};
+            const totals = scoreRecord.totals || computePlayerTotals({ scoreCard: sc, yahtzeeBonuses: scoreRecord.yahtzeeBonuses || 0 });
+
+            let html = `
+                <table class="w-full text-left border-collapse text-xs sm:text-sm">
+                    <thead>
+                        <tr class="border-b border-white/20 text-gray-400 uppercase text-[10px] font-bold">
+                            <th class="p-2 sm:p-2.5">Category</th>
+                            <th class="p-2 sm:p-2.5 text-right">Score</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/5">
+            `;
+
+            // Upper Section
+            html += `<tr class="bg-black/40"><td colspan="2" class="px-2.5 py-1 font-bold font-cinzel text-xs text-amber-300 uppercase">Upper Section</td></tr>`;
+            ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'].forEach(catId => {
+                const cat = CATEGORIES[catId];
+                const val = sc[catId];
+                html += `
+                    <tr class="hover:bg-white/5">
+                        <td class="p-2 text-gray-200">${cat.name} <span class="text-[10px] text-gray-500">(${cat.desc})</span></td>
+                        <td class="p-2 text-right font-semibold ${val === 0 ? 'text-rose-400' : 'text-amber-200'}">${val !== null && val !== undefined ? val : '-'}</td>
+                    </tr>
+                `;
+            });
+
+            // Upper Bonus
+            html += `
+                <tr class="bg-black/20 font-semibold">
+                    <td class="p-2 text-gray-300">Upper Subtotal / Bonus (+35)</td>
+                    <td class="p-2 text-right ${totals.upperBonus > 0 ? 'text-emerald-400 font-bold' : 'text-gray-400'}">
+                        ${totals.upperSum} pts ${totals.upperBonus > 0 ? ' (+35 Bonus)' : ''}
+                    </td>
+                </tr>
+            `;
+
+            // Lower Section
+            html += `<tr class="bg-black/40"><td colspan="2" class="px-2.5 py-1 font-bold font-cinzel text-xs text-amber-300 uppercase">Lower Section</td></tr>`;
+            ['threeKind', 'fourKind', 'fullHouse', 'smStraight', 'lgStraight', 'yahtzee', 'chance'].forEach(catId => {
+                const cat = CATEGORIES[catId];
+                const val = sc[catId];
+                html += `
+                    <tr class="hover:bg-white/5">
+                        <td class="p-2 text-gray-200">${cat.name} <span class="text-[10px] text-gray-500">(${cat.desc})</span></td>
+                        <td class="p-2 text-right font-semibold ${val === 0 ? 'text-rose-400' : 'text-amber-200'}">${val !== null && val !== undefined ? val : '-'}</td>
+                    </tr>
+                `;
+            });
+
+            // Yahtzee Bonus
+            if (scoreRecord.yahtzeeBonuses > 0 || totals.yahtzeeBonusTotal > 0) {
+                html += `
+                    <tr class="bg-black/20 font-semibold">
+                        <td class="p-2 text-amber-300">Yahtzee Bonuses (+100 ea)</td>
+                        <td class="p-2 text-right text-amber-400 font-bold">+${totals.yahtzeeBonusTotal} (${scoreRecord.yahtzeeBonuses || 0})</td>
+                    </tr>
+                `;
+            }
+
+            // Total
+            html += `
+                <tr class="bg-amber-500/10 font-bold border-t-2 border-amber-500/40">
+                    <td class="p-2.5 font-cinzel text-amber-300">GRAND TOTAL</td>
+                    <td class="p-2.5 text-right font-cinzel text-lg text-amber-300">${totals.grandTotal}</td>
+                </tr>
+            `;
+
+            html += `</tbody></table>`;
+            DOM.detailTableContainer.innerHTML = html;
+
+            DOM.scoreDetailModal.classList.remove('hidden');
         }
 
         /**
@@ -1418,6 +1589,9 @@
                 DOM.highScoresModal.classList.remove('hidden');
             });
             DOM.closeHighScoresBtn.addEventListener('click', () => DOM.highScoresModal.classList.add('hidden'));
+
+            DOM.closeScoreDetailBtn.addEventListener('click', () => DOM.scoreDetailModal.classList.add('hidden'));
+            DOM.closeScoreDetailFooterBtn.addEventListener('click', () => DOM.scoreDetailModal.classList.add('hidden'));
 
             DOM.clearHighScoresBtn.addEventListener('click', () => {
                 localStorage.removeItem('yahtzee_deluxe_scores');
