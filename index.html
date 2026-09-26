@@ -1301,8 +1301,6 @@
             // Trigger Victory Modal & Celebratory Confetti
             if (gameState.players.length === 1) {
                 DOM.victoryTitle.textContent = 'Game Complete!';
-            } else if (winner.name.trim().toLowerCase() === 'you') {
-                DOM.victoryTitle.textContent = 'You Win!';
             } else {
                 DOM.victoryTitle.textContent = `${winner.name} Wins!`;
             }
@@ -1599,28 +1597,58 @@
                 DOM.modeSettingsContainer.innerHTML = `
                     <div>
                         <label class="block text-xs font-semibold uppercase text-gray-300 tracking-wider mb-2">Player Name</label>
-                        <input type="text" id="soloPlayerName" value="Player 1" class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white font-semibold focus:outline-none focus:border-amber-400">
+                        <input type="text" id="soloPlayerName" value="Player 1" maxlength="12" class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white font-semibold focus:outline-none focus:border-amber-400">
                     </div>
                 `;
             } else if (gameState.mode === 'pass') {
                 DOM.modeSettingsContainer.innerHTML = `
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-gray-300 tracking-wider mb-2">Number of Players</label>
-                        <select id="passPlayerCount" class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white font-semibold focus:outline-none focus:border-amber-400">
-                            <option value="2">2 Players</option>
-                            <option value="3">3 Players</option>
-                            <option value="4">4 Players</option>
-                        </select>
+                    <div class="flex flex-col gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-gray-300 tracking-wider mb-2">Number of Players</label>
+                            <select id="passPlayerCount" class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white font-semibold focus:outline-none focus:border-amber-400">
+                                <option value="2">2 Players</option>
+                                <option value="3">3 Players</option>
+                                <option value="4">4 Players</option>
+                            </select>
+                        </div>
+                        <div id="passNamesContainer" class="flex flex-col gap-2.5 mt-1">
+                            <!-- Dynamic name inputs generated here -->
+                        </div>
                     </div>
                 `;
+
+                const updatePassNameInputs = () => {
+                    const count = parseInt(document.getElementById('passPlayerCount').value);
+                    const container = document.getElementById('passNamesContainer');
+                    let inputsHtml = '';
+                    for (let i = 1; i <= count; i++) {
+                        inputsHtml += `
+                            <div>
+                                <label class="block text-[11px] font-semibold uppercase text-gray-400 tracking-wider mb-1">Player ${i} Name</label>
+                                <input type="text" id="passPlayer${i}Name" value="Player ${i}" maxlength="12" class="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white font-semibold text-sm focus:outline-none focus:border-amber-400">
+                            </div>
+                        `;
+                    }
+                    container.innerHTML = inputsHtml;
+                };
+
+                const selectElem = document.getElementById('passPlayerCount');
+                selectElem.addEventListener('change', updatePassNameInputs);
+                updatePassNameInputs();
             } else if (gameState.mode === 'ai') {
                 DOM.modeSettingsContainer.innerHTML = `
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-gray-300 tracking-wider mb-2">AI Difficulty</label>
-                        <select id="aiDifficultySelect" class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white font-semibold focus:outline-none focus:border-amber-400">
-                            <option value="casual" selected>Casual (Balanced)</option>
-                            <option value="strategic">Strategic (Expert)</option>
-                        </select>
+                    <div class="flex flex-col gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-gray-300 tracking-wider mb-2">Your Name</label>
+                            <input type="text" id="aiHumanName" value="Player 1" maxlength="12" class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white font-semibold focus:outline-none focus:border-amber-400">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-gray-300 tracking-wider mb-2">AI Difficulty</label>
+                            <select id="aiDifficultySelect" class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white font-semibold focus:outline-none focus:border-amber-400">
+                                <option value="casual" selected>Casual (Balanced)</option>
+                                <option value="strategic">Strategic (Expert)</option>
+                            </select>
+                        </div>
                     </div>
                 `;
             }
@@ -1643,17 +1671,20 @@
             gameState.dice = Array.from({ length: 5 }, () => ({ value: 1, held: false }));
 
             if (gameState.mode === 'solo') {
-                const pName = document.getElementById('soloPlayerName')?.value || 'Player 1';
+                const pName = document.getElementById('soloPlayerName')?.value.trim() || 'Player 1';
                 gameState.players.push({ name: pName, isAI: false, scoreCard: createBlankScorecard(), yahtzeeBonuses: 0 });
             } else if (gameState.mode === 'pass') {
                 const count = parseInt(document.getElementById('passPlayerCount')?.value || '2');
                 for (let i = 1; i <= count; i++) {
-                    gameState.players.push({ name: `Player ${i}`, isAI: false, scoreCard: createBlankScorecard(), yahtzeeBonuses: 0 });
+                    const inputElem = document.getElementById(`passPlayer${i}Name`);
+                    const pName = inputElem?.value.trim() || `Player ${i}`;
+                    gameState.players.push({ name: pName, isAI: false, scoreCard: createBlankScorecard(), yahtzeeBonuses: 0 });
                 }
             } else if (gameState.mode === 'ai') {
+                const hName = document.getElementById('aiHumanName')?.value.trim() || 'Player 1';
                 const diff = document.getElementById('aiDifficultySelect')?.value || 'casual';
                 gameState.aiDifficulty = diff;
-                gameState.players.push({ name: 'You', isAI: false, scoreCard: createBlankScorecard(), yahtzeeBonuses: 0 });
+                gameState.players.push({ name: hName, isAI: false, scoreCard: createBlankScorecard(), yahtzeeBonuses: 0 });
                 gameState.players.push({ name: `AI (${diff.toUpperCase()})`, isAI: true, scoreCard: createBlankScorecard(), yahtzeeBonuses: 0 });
             }
 
