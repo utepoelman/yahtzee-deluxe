@@ -586,10 +586,10 @@
 
     <!-- HIGH SCORES MODAL -->
     <div id="highScoresModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
-        <div class="glass-panel max-w-xl w-full p-6 rounded-3xl border border-white/10 shadow-2xl flex flex-col gap-4 max-h-[85vh]">
+        <div class="glass-panel max-w-md w-full p-6 rounded-3xl border border-white/10 shadow-2xl flex flex-col gap-4">
             <div class="flex items-center justify-between pb-3 border-b border-white/10">
                 <h3 class="text-xl font-bold font-cinzel text-amber-300 flex items-center gap-2">
-                    <i class="fa-solid fa-trophy"></i> Local History & Leaderboard
+                    <i class="fa-solid fa-trophy"></i> Local Hall of Fame
                 </h3>
                 <button id="closeHighScoresBtn" class="p-2 text-gray-400 hover:text-white text-xl">
                     <i class="fa-solid fa-xmark"></i>
@@ -598,15 +598,9 @@
             <div id="highScoresList" class="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
                 <!-- High scores injected here -->
             </div>
-            <div class="flex items-center justify-between pt-3 border-t border-white/10 gap-2">
-                <button id="exportCsvBtn" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center gap-2">
-                    <i class="fa-solid fa-file-excel text-sm"></i>
-                    <span>Export Spreadsheet (.CSV)</span>
-                </button>
-                <button id="clearHighScoresBtn" class="text-xs text-red-400 hover:text-red-300 py-2 underline">
-                    Clear History
-                </button>
-            </div>
+            <button id="clearHighScoresBtn" class="text-xs text-red-400 hover:text-red-300 self-center py-2 underline">
+                Clear Leaderboard History
+            </button>
         </div>
     </div>
 
@@ -691,7 +685,6 @@
             highScoresBtn: document.getElementById('highScoresBtn'),
             closeHighScoresBtn: document.getElementById('closeHighScoresBtn'),
             highScoresList: document.getElementById('highScoresList'),
-            exportCsvBtn: document.getElementById('exportCsvBtn'),
             clearHighScoresBtn: document.getElementById('clearHighScoresBtn'),
             soundToggleBtn: document.getElementById('soundToggleBtn'),
             soundIcon: document.getElementById('soundIcon'),
@@ -725,7 +718,571 @@
         }
 
         /**
-         * ENDGAME & DETAILED HISTORY STORAGE
+         * CALCULATE CATEGORY SCORE FROM DICE VALUES
+         */
+        function calculateCategoryScore(catId, diceValues, scoreCard) {
+            if (!diceValues || diceValues.length === 0) return 0;
+
+            const sum = diceValues.reduce((a, b) => a + b, 0);
+            const counts = {};
+            diceValues.forEach(v => counts[v] = (counts[v] || 0) + 1);
+            const maxFreq = Math.max(...Object.values(counts));
+            const isFiveOfAKind = maxFreq === 5;
+
+            // Yahtzee Joker Rule check:
+            // If player already scored 50 in Yahtzee AND rolls another 5 of a kind
+            const isYahtzeeBonusJoker = isFiveOfAKind && scoreCard && scoreCard.yahtzee === 50;
+
+            if (['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'].includes(catId)) {
+                const valMap = { ones: 1, twos: 2, threes: 3, fours: 4, fives: 5, sixes: 6 };
+                const targetVal = valMap[catId];
+                return (counts[targetVal] || 0) * targetVal;
+            }
+
+            switch (catId) {
+                case 'threeKind':
+                    return maxFreq >= 3 ? sum : 0;
+                case 'fourKind':
+                    return maxFreq >= 4 ? sum : 0;
+                case 'fullHouse': {
+                    const isFH = Object.values(counts).includes(3) && Object.values(counts).includes(2);
+                    return (isFH || isYahtzeeBonusJoker) ? 25 : 0;
+                }
+                case 'smStraight': {
+                    const hasSm = (
+                        (counts[1] && counts[2] && counts[3] && counts[4]) ||
+                        (counts[2] && counts[3] && counts[4] && counts[5]) ||
+                        (counts[3] && counts[4] && counts[5] && counts[6])
+                    );
+                    return (hasSm || isYahtzeeBonusJoker) ? 30 : 0;
+                }
+                case 'lgStraight': {
+                    const hasLg = (
+                        (counts[1] && counts[2] && counts[3] && counts[4] && counts[5]) ||
+                        (counts[2] && counts[3] && counts[4] && counts[5] && counts[6])
+                    );
+                    return (hasLg || isYahtzeeBonusJoker) ? 40 : 0;
+                }
+                case 'yahtzee':
+                    return isFiveOfAKind ? 50 : 0;
+                case 'chance':
+                    return sum;
+                default:
+                    return 0;
+            }
+        }
+
+        /**
+         * RENDER DICE IN FELT TRAY
+         */
+        function renderDiceTray() {
+            DOM.diceTray.innerHTML = '';
+
+            gameState.dice.forEach((die, index) => {
+                const diceWrapper = document.createElement('div');
+                diceWrapper.className = `dice-container ${die.held ? 'dice-held' : ''}`;
+
+                const dice3d = document.createElement('div');
+                dice3d.className = `dice-3d ${gameState.isRolling && !die.held ? 'dice-rolling' : ''}`;
+
+                const diceFace = document.createElement('div');
+                diceFace.className = 'dice-face';
+
+                const pipIndices = PIP_LAYOUTS[die.value] || [];
+                for (let i = 0; i < 9; i++) {
+                    const pipSlot = document.createElement('div');
+                    if (pipIndices.includes(i)) {
+                        const pip = document.createElement('div');
+                        pip.className = `pip ${die.value === 1 ? 'red-pip' : ''}`;
+                        pipSlot.appendChild(pip);
+                    }
+                    diceFace.appendChild(pipSlot);
+                }
+
+                dice3d.appendChild(diceFace);
+                diceWrapper.appendChild(dice3d);
+
+                diceWrapper.addEventListener('click', () => {
+                    toggleHoldDice(index);
+                });
+
+                DOM.diceTray.appendChild(diceWrapper);
+            });
+
+            updateRollsIndicator();
+        }
+
+        function toggleHoldDice(index) {
+            if (gameState.rollsRemaining === 3 || gameState.isRolling || gameState.gameEnded) return;
+            const activePlayer = gameState.players[gameState.currentPlayerIndex];
+            if (activePlayer && activePlayer.isAI) return;
+
+            gameState.dice[index].held = !gameState.dice[index].held;
+            audio.playToggleHold();
+            renderDiceTray();
+        }
+
+        /**
+         * ROLL UNHELD DICE
+         */
+        function rollDice() {
+            if (gameState.rollsRemaining <= 0 || gameState.isRolling || gameState.gameEnded) return;
+
+            gameState.isRolling = true;
+            audio.playDiceRoll();
+
+            renderDiceTray();
+
+            setTimeout(() => {
+                gameState.dice.forEach(d => {
+                    if (!d.held) {
+                        d.value = Math.floor(Math.random() * 6) + 1;
+                    }
+                });
+
+                gameState.rollsRemaining--;
+                gameState.isRolling = false;
+
+                const counts = {};
+                gameState.dice.forEach(d => counts[d.value] = (counts[d.value] || 0) + 1);
+                if (Object.values(counts).includes(5)) {
+                    audio.playYahtzee();
+                    if (typeof confetti === 'function') {
+                        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+                    }
+                }
+
+                renderDiceTray();
+                renderScorecard();
+            }, 600);
+        }
+
+        function updateRollsIndicator() {
+            DOM.rollsLeftContainer.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                const dot = document.createElement('div');
+                const isActive = i < gameState.rollsRemaining;
+                dot.className = `w-3.5 h-3.5 rounded-full transition-all ${
+                    isActive ? 'bg-amber-400 shadow-glow' : 'bg-gray-700/60'
+                }`;
+                DOM.rollsLeftContainer.appendChild(dot);
+            }
+
+            const isAITurn = gameState.players[gameState.currentPlayerIndex]?.isAI;
+            DOM.rollBtn.disabled = gameState.rollsRemaining === 0 || gameState.isRolling || isAITurn;
+            DOM.rollBtn.innerHTML = `
+                <i class="fa-solid fa-dice text-2xl"></i>
+                <span>Roll Dice (${gameState.rollsRemaining})</span>
+            `;
+
+            if (gameState.rollsRemaining === 3) {
+                DOM.diceInstructionText.textContent = isAITurn ? "Computer is thinking..." : 'Click "Roll Dice" to start your turn';
+            } else if (gameState.rollsRemaining > 0) {
+                DOM.diceInstructionText.textContent = isAITurn ? "Computer is choosing dice..." : 'Click dice to HOLD, then Roll or select a Score';
+            } else {
+                DOM.diceInstructionText.textContent = isAITurn ? "Computer is recording score..." : 'No rolls left - select a box on the scorecard!';
+            }
+        }
+
+        /**
+         * UNIFIED SCORECARD UI RENDERER WITH PLAYER COLUMN ZOOM
+         */
+        function renderScorecard() {
+            const activePlayer = gameState.players[gameState.currentPlayerIndex];
+            const diceValues = gameState.dice.map(d => d.value);
+
+            DOM.activePlayerName.textContent = activePlayer.name;
+            DOM.activePlayerAvatar.textContent = activePlayer.isAI ? 'AI' : `P${gameState.currentPlayerIndex + 1}`;
+
+            // Compute totals for all players ahead of time
+            const playerTotalsList = gameState.players.map(p => computePlayerTotals(p));
+
+            let html = `
+                <table class="w-full text-left border-collapse border-spacing-0">
+                    <thead>
+                        <tr class="border-b border-white/20">
+                            <th class="p-2 sm:p-2.5 text-xs font-bold text-gray-400 uppercase tracking-wider min-w-[140px] sm:min-w-[160px]">
+                                Categories
+                            </th>
+            `;
+
+            // Render Header for Each Player Column
+            gameState.players.forEach((p, pIdx) => {
+                const isActive = pIdx === gameState.currentPlayerIndex;
+                html += `
+                    <th class="p-2 sm:p-2.5 text-center player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                        <div class="flex flex-col items-center justify-center gap-1">
+                            <span class="text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-amber-400' : 'text-gray-400'}">
+                                ${p.isAI ? 'BOT' : `PLAYER ${pIdx + 1}`}
+                            </span>
+                            <span class="font-extrabold ${isActive ? 'text-base sm:text-lg text-amber-200' : 'text-xs sm:text-sm text-gray-300'} truncate max-w-[100px]">
+                                ${p.name}
+                            </span>
+                            ${isActive ? '<span class="text-[9px] bg-amber-400/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-400/30 shadow-glow">TURN</span>' : ''}
+                        </div>
+                    </th>
+                `;
+            });
+
+            html += `</tr></thead><tbody class="divide-y divide-white/5 text-xs sm:text-sm">`;
+
+            // Helper to render section title divider row
+            const renderSectionHeader = (title) => {
+                html += `
+                    <tr class="bg-black/40">
+                        <td colspan="${gameState.players.length + 1}" class="px-2.5 py-1.5 font-bold font-cinzel text-xs text-amber-300 uppercase tracking-wider border-y border-white/10">
+                            ${title}
+                        </td>
+                    </tr>
+                `;
+            };
+
+            // UPPER SECTION CATEGORIES
+            renderSectionHeader('<i class="fa-solid fa-arrow-up-1-9 text-amber-400 mr-1.5"></i> Upper Section');
+
+            const upperCats = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'];
+            upperCats.forEach(catId => {
+                const cat = CATEGORIES[catId];
+                html += `<tr class="hover:bg-white/5 transition-colors">`;
+                html += `
+                    <td class="p-2 sm:p-2.5">
+                        <div class="font-semibold text-gray-200 text-xs sm:text-sm">${cat.name}</div>
+                        <div class="text-[10px] text-gray-400">${cat.desc}</div>
+                    </td>
+                `;
+
+                gameState.players.forEach((p, pIdx) => {
+                    const isActive = pIdx === gameState.currentPlayerIndex;
+                    const isScored = p.scoreCard[catId] !== null;
+                    const scoreVal = p.scoreCard[catId];
+                    const potentialVal = calculateCategoryScore(catId, diceValues, p.scoreCard);
+                    const isSelectable = isActive && !isScored && gameState.rollsRemaining < 3 && !p.isAI && !gameState.gameEnded;
+
+                    html += `
+                        <td class="p-1.5 sm:p-2 text-center align-middle player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                            ${isScored 
+                                ? `<span class="font-extrabold font-cinzel ${isActive ? 'text-base sm:text-lg text-amber-300' : 'text-sm text-gray-300'}">${scoreVal}</span>`
+                                : isSelectable
+                                    ? `<button onclick="selectCategoryScore('${catId}', ${potentialVal})" class="score-slot-btn selectable w-full py-1.5 px-1 rounded-lg text-xs sm:text-sm font-bold text-amber-300">
+                                        +${potentialVal}
+                                       </button>`
+                                    : `<span class="text-xs text-gray-600 font-mono">-</span>`
+                            }
+                        </td>
+                    `;
+                });
+                html += `</tr>`;
+            });
+
+            // UPPER SUBTOTAL ROW
+            html += `<tr class="bg-black/30 font-bold border-t border-white/10">`;
+            html += `<td class="p-2 sm:p-2.5 text-xs text-gray-300">Upper Subtotal (Req. 63)</td>`;
+            gameState.players.forEach((p, pIdx) => {
+                const isActive = pIdx === gameState.currentPlayerIndex;
+                const totals = playerTotalsList[pIdx];
+                html += `
+                    <td class="p-2 text-center player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                        <span class="text-xs ${isActive ? 'text-amber-300 font-extrabold' : 'text-gray-400'}">${totals.upperSum} / 63</span>
+                    </td>
+                `;
+            });
+            html += `</tr>`;
+
+            // UPPER BONUS ROW (+35)
+            html += `<tr class="bg-black/30 font-bold">`;
+            html += `<td class="p-2 sm:p-2.5 text-xs text-gray-300">Upper Bonus (+35)</td>`;
+            gameState.players.forEach((p, pIdx) => {
+                const isActive = pIdx === gameState.currentPlayerIndex;
+                const totals = playerTotalsList[pIdx];
+                html += `
+                    <td class="p-2 text-center player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                        ${totals.upperBonus > 0 
+                            ? `<span class="text-xs font-extrabold text-emerald-400"><i class="fa-solid fa-check mr-0.5"></i> +35</span>`
+                            : `<span class="text-[11px] text-gray-500 font-normal">Pending</span>`
+                        }
+                    </td>
+                `;
+            });
+            html += `</tr>`;
+
+            // LOWER SECTION CATEGORIES
+            renderSectionHeader('<i class="fa-solid fa-star text-amber-400 mr-1.5"></i> Lower Section');
+
+            const lowerCats = ['threeKind', 'fourKind', 'fullHouse', 'smStraight', 'lgStraight', 'yahtzee', 'chance'];
+            lowerCats.forEach(catId => {
+                const cat = CATEGORIES[catId];
+                html += `<tr class="hover:bg-white/5 transition-colors">`;
+                html += `
+                    <td class="p-2 sm:p-2.5">
+                        <div class="font-semibold text-gray-200 text-xs sm:text-sm">${cat.name}</div>
+                        <div class="text-[10px] text-gray-400">${cat.desc}</div>
+                    </td>
+                `;
+
+                gameState.players.forEach((p, pIdx) => {
+                    const isActive = pIdx === gameState.currentPlayerIndex;
+                    const isScored = p.scoreCard[catId] !== null;
+                    const scoreVal = p.scoreCard[catId];
+                    const potentialVal = calculateCategoryScore(catId, diceValues, p.scoreCard);
+                    const isSelectable = isActive && !isScored && gameState.rollsRemaining < 3 && !p.isAI && !gameState.gameEnded;
+
+                    html += `
+                        <td class="p-1.5 sm:p-2 text-center align-middle player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                            ${isScored 
+                                ? `<span class="font-extrabold font-cinzel ${isActive ? 'text-base sm:text-lg text-amber-300' : 'text-sm text-gray-300'}">${scoreVal}</span>`
+                                : isSelectable
+                                    ? `<button onclick="selectCategoryScore('${catId}', ${potentialVal})" class="score-slot-btn selectable w-full py-1.5 px-1 rounded-lg text-xs sm:text-sm font-bold text-amber-300">
+                                        +${potentialVal}
+                                       </button>`
+                                    : `<span class="text-xs text-gray-600 font-mono">-</span>`
+                            }
+                        </td>
+                    `;
+                });
+                html += `</tr>`;
+            });
+
+            // YAHTZEE BONUS COUNTER ROW
+            html += `<tr class="bg-black/30 font-bold border-t border-white/10">`;
+            html += `<td class="p-2 sm:p-2.5 text-xs text-gray-300">Yahtzee Bonus (+100 ea)</td>`;
+            gameState.players.forEach((p, pIdx) => {
+                const isActive = pIdx === gameState.currentPlayerIndex;
+                const totals = playerTotalsList[pIdx];
+                html += `
+                    <td class="p-2 text-center player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                        <span class="text-xs ${p.yahtzeeBonuses > 0 ? 'text-amber-400 font-extrabold' : 'text-gray-500'}">
+                            ${p.yahtzeeBonuses} (${totals.yahtzeeBonusTotal} pts)
+                        </span>
+                    </td>
+                `;
+            });
+            html += `</tr>`;
+
+            // GRAND TOTAL FOOTER ROW
+            html += `<tr class="bg-gradient-to-r from-amber-500/20 via-amber-400/10 to-transparent border-t-2 border-amber-500/40">`;
+            html += `<td class="p-2.5 sm:p-3 font-extrabold font-cinzel text-amber-300 text-sm uppercase">GRAND TOTAL</td>`;
+            gameState.players.forEach((p, pIdx) => {
+                const isActive = pIdx === gameState.currentPlayerIndex;
+                const totals = playerTotalsList[pIdx];
+                html += `
+                    <td class="p-2.5 sm:p-3 text-center player-col ${isActive ? 'active-col' : 'inactive-col'}">
+                        <span class="font-black font-cinzel ${isActive ? 'text-xl sm:text-2xl text-amber-300' : 'text-base sm:text-lg text-gray-200'}">
+                            ${totals.grandTotal}
+                        </span>
+                    </td>
+                `;
+            });
+            html += `</tr>`;
+
+            html += `</tbody></table>`;
+
+            DOM.unifiedScoreSheet.innerHTML = html;
+            renderScoreboardMini();
+        }
+
+        function renderScoreboardMini() {
+            DOM.scoreboardMiniList.innerHTML = '';
+            gameState.players.forEach((p, idx) => {
+                const totals = computePlayerTotals(p);
+                const isActive = idx === gameState.currentPlayerIndex;
+
+                const row = document.createElement('div');
+                row.className = `p-2.5 rounded-xl flex items-center justify-between border transition-all ${
+                    isActive ? 'bg-amber-500/10 border-amber-500/30' : 'bg-black/20 border-white/5'
+                }`;
+
+                row.innerHTML = `
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-6 h-6 rounded-full ${isActive ? 'bg-amber-500 text-amber-950' : 'bg-gray-800 text-gray-400'} text-xs font-bold flex items-center justify-center">
+                            ${p.isAI ? 'AI' : idx + 1}
+                        </div>
+                        <span class="text-xs font-semibold ${isActive ? 'text-amber-200' : 'text-gray-300'}">${p.name}</span>
+                    </div>
+                    <span class="text-sm font-bold font-cinzel text-amber-400">${totals.grandTotal} pts</span>
+                `;
+
+                DOM.scoreboardMiniList.appendChild(row);
+            });
+        }
+
+        /**
+         * TURN SELECTION & TURN PROGRESSION
+         */
+        function selectCategoryScore(catId, points) {
+            const activePlayer = gameState.players[gameState.currentPlayerIndex];
+            
+            // Check for Bonus Yahtzee tracking (+100 pts)
+            const diceValues = gameState.dice.map(d => d.value);
+            const counts = {};
+            diceValues.forEach(v => counts[v] = (counts[v] || 0) + 1);
+            if (Object.values(counts).includes(5) && activePlayer.scoreCard.yahtzee === 50) {
+                activePlayer.yahtzeeBonuses = (activePlayer.yahtzeeBonuses || 0) + 1;
+            }
+
+            activePlayer.scoreCard[catId] = points;
+            audio.playScoreSelect();
+
+            advanceTurn();
+        }
+
+        function advanceTurn() {
+            // Reset dice hold states
+            gameState.dice.forEach(d => {
+                d.held = false;
+                d.value = 1;
+            });
+            gameState.rollsRemaining = 3;
+
+            // Advance player index
+            gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+
+            // Round increments after all players take turn
+            if (gameState.currentPlayerIndex === 0) {
+                gameState.round++;
+            }
+
+            // Check Game Over Condition
+            if (gameState.round > gameState.maxRounds) {
+                endGame();
+                return;
+            }
+
+            renderDiceTray();
+            renderScorecard();
+
+            // Trigger AI Turn if Computer's Turn
+            const nextPlayer = gameState.players[gameState.currentPlayerIndex];
+            if (nextPlayer.isAI) {
+                executeAITurn();
+            }
+        }
+
+        /**
+         * ARTIFICIAL INTELLIGENCE OPPONENT LOGIC (Easy, Medium, Hard)
+         */
+        function executeAITurn() {
+            const aiPlayer = gameState.players[gameState.currentPlayerIndex];
+            const difficulty = gameState.aiDifficulty;
+
+            const aiDecisionStep = () => {
+                if (gameState.rollsRemaining === 3) {
+                    rollDice();
+                    setTimeout(aiDecisionStep, 1000);
+                    return;
+                }
+
+                const diceValues = gameState.dice.map(d => d.value);
+
+                if (gameState.rollsRemaining > 0) {
+                    // Decide which dice to hold based on difficulty
+                    const holdMap = evaluateAIHolds(diceValues, aiPlayer, difficulty);
+                    gameState.dice.forEach((d, idx) => {
+                        d.held = holdMap[idx];
+                    });
+                    renderDiceTray();
+
+                    // Decide whether to roll again or score now
+                    if (shouldAIRollAgain(diceValues, aiPlayer, difficulty)) {
+                        rollDice();
+                        setTimeout(aiDecisionStep, 1000);
+                        return;
+                    }
+                }
+
+                // AI chooses best available score category
+                const chosenCat = evaluateAICategoryChoice(diceValues, aiPlayer, difficulty);
+                const score = calculateCategoryScore(chosenCat, diceValues, aiPlayer.scoreCard);
+                
+                setTimeout(() => {
+                    selectCategoryScore(chosenCat, score);
+                }, 800);
+            };
+
+            setTimeout(aiDecisionStep, 800);
+        }
+
+        function evaluateAIHolds(diceValues, aiPlayer, difficulty) {
+            const holds = [false, false, false, false, false];
+            const counts = {};
+            diceValues.forEach(v => counts[v] = (counts[v] || 0) + 1);
+
+            if (difficulty === 'easy') {
+                // Easy AI randomly holds matching dice
+                const maxCountVal = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+                diceValues.forEach((v, i) => {
+                    if (v == maxCountVal && counts[v] > 1) holds[i] = true;
+                });
+                return holds;
+            }
+
+            // Medium & Hard Logic
+            const maxFreq = Math.max(...Object.values(counts));
+            const bestVal = Object.keys(counts).find(k => counts[k] === maxFreq);
+
+            // Hold pairs, trips, quads
+            if (maxFreq >= 2) {
+                diceValues.forEach((v, i) => {
+                    if (v == bestVal) holds[i] = true;
+                });
+            }
+
+            // Check for straight opportunities in Hard mode
+            if (difficulty === 'hard' && maxFreq < 3) {
+                const openStraight = !aiPlayer.scoreCard.smStraight || !aiPlayer.scoreCard.lgStraight;
+                if (openStraight) {
+                    const uniqueVals = [...new Set(diceValues)].sort();
+                    // Hold unique sequence
+                    uniqueVals.forEach((val) => {
+                        const idx = diceValues.indexOf(val);
+                        if (idx !== -1) holds[idx] = true;
+                    });
+                }
+            }
+
+            return holds;
+        }
+
+        function shouldAIRollAgain(diceValues, aiPlayer, difficulty) {
+            if (gameState.rollsRemaining <= 0) return false;
+            
+            const counts = {};
+            diceValues.forEach(v => counts[v] = (counts[v] || 0) + 1);
+            
+            // If already got Yahtzee, stop rolling unless yahtzee is already filled
+            if (Object.values(counts).includes(5) && aiPlayer.scoreCard.yahtzee === null) {
+                return false;
+            }
+
+            return true;
+        }
+
+        function evaluateAICategoryChoice(diceValues, aiPlayer, difficulty) {
+            const openCats = Object.keys(CATEGORIES).filter(catId => aiPlayer.scoreCard[catId] === null);
+            
+            let bestCat = openCats[0];
+            let maxScore = -1;
+
+            openCats.forEach(catId => {
+                const score = calculateCategoryScore(catId, diceValues, aiPlayer.scoreCard);
+                // Weighted valuation for strategic categories
+                let weight = score;
+
+                if (difficulty === 'hard') {
+                    if (catId === 'yahtzee' && score === 50) weight += 100;
+                    if (['ones', 'twos'].includes(catId) && score < 3) weight -= 5; // Sacrifice low upper scores over burning combos
+                }
+
+                if (weight > maxScore) {
+                    maxScore = weight;
+                    bestCat = catId;
+                }
+            });
+
+            return bestCat;
+        }
+
+        /**
+         * ENDGAME & HIGH SCORES STORAGE
          */
         function endGame() {
             gameState.gameEnded = true;
@@ -733,27 +1290,17 @@
             // Calculate final standings
             const standings = gameState.players.map(p => {
                 const totals = computePlayerTotals(p);
-                return { name: p.name, score: totals.grandTotal, isAI: p.isAI, playerObj: p, totals: totals };
+                return { name: p.name, score: totals.grandTotal, isAI: p.isAI };
             }).sort((a, b) => b.score - a.score);
 
             const winner = standings[0];
 
-            // Save every human player's full game breakdown & calculate percentile rank
-            const humanPercentiles = {};
-            gameState.players.forEach(p => {
-                if (!p.isAI) {
-                    const totals = computePlayerTotals(p);
-                    const percData = saveHumanPlayerScore(p, totals);
-                    humanPercentiles[p.name] = percData;
-                }
-            });
+            // Save to Local High Scores
+            saveHighScore(winner.name, winner.score);
 
-            // Trigger Victory Modal & Title Logic
-            const isWinnerYou = winner.name.trim().toLowerCase() === 'you';
+            // Trigger Victory Modal & Celebratory Confetti
             if (gameState.players.length === 1) {
                 DOM.victoryTitle.textContent = 'Game Complete!';
-            } else if (isWinnerYou) {
-                DOM.victoryTitle.textContent = 'You Win!';
             } else {
                 DOM.victoryTitle.textContent = `${winner.name} Wins!`;
             }
@@ -762,30 +1309,15 @@
             DOM.victoryStandingsList.innerHTML = '';
             standings.forEach((s, idx) => {
                 const row = document.createElement('div');
-                row.className = `p-3 rounded-xl flex flex-col gap-1 border ${
+                row.className = `p-3 rounded-xl flex items-center justify-between border ${
                     idx === 0 ? 'bg-amber-500/20 border-amber-400 text-amber-200' : 'bg-white/5 border-white/5 text-gray-300'
                 }`;
-
-                let percBadge = '';
-                if (!s.isAI && humanPercentiles[s.name]) {
-                    const perc = humanPercentiles[s.name];
-                    percBadge = `
-                        <div class="text-[11px] text-emerald-300 font-medium flex items-center gap-1 mt-1 bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1 rounded-lg w-fit">
-                            <i class="fa-solid fa-chart-line text-emerald-400"></i>
-                            <span>${perc.isFirst ? 'First score recorded on this device!' : `${perc.percentile}th percentile on this device (${perc.totalGames} total games)`}</span>
-                        </div>
-                    `;
-                }
-
                 row.innerHTML = `
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <span class="font-bold font-cinzel text-base">${idx + 1}.</span>
-                            <span class="font-semibold text-sm">${s.name} ${s.isAI ? '<span class="text-[10px] text-gray-400 font-normal">(AI)</span>' : ''}</span>
-                        </div>
-                        <span class="font-extrabold font-cinzel text-lg">${s.score} pts</span>
+                    <div class="flex items-center gap-3">
+                        <span class="font-bold font-cinzel text-base">${idx + 1}.</span>
+                        <span class="font-semibold text-sm">${s.name}</span>
                     </div>
-                    ${percBadge}
+                    <span class="font-extrabold font-cinzel text-lg">${s.score} pts</span>
                 `;
                 DOM.victoryStandingsList.appendChild(row);
             });
@@ -794,142 +1326,45 @@
             confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
         }
 
-        function getGameHistory() {
+        function saveHighScore(name, score) {
             try {
-                return JSON.parse(localStorage.getItem('yahtzee_deluxe_full_history') || '[]');
-            } catch (e) {
-                return [];
-            }
-        }
-
-        function saveHumanPlayerScore(p, totals) {
-            let history = getGameHistory();
-
-            // Calculate percentile against previous scores BEFORE adding current entry
-            const pastScores = history.map(h => Number(h.grandTotal)).filter(s => !isNaN(s));
-            let percentile = 100;
-            let isFirst = pastScores.length === 0;
-
-            if (!isFirst) {
-                const countLessOrEqual = pastScores.filter(s => s <= totals.grandTotal).length;
-                percentile = Math.round((countLessOrEqual / pastScores.length) * 100);
-                percentile = Math.max(1, Math.min(100, percentile));
-            }
-
-            const entry = {
-                id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-                date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                player: p.name,
-                mode: gameState.mode === 'solo' ? 'Solo' : (gameState.mode === 'pass' ? 'Pass & Play' : 'VS Computer'),
-                ones: p.scoreCard.ones ?? 0,
-                twos: p.scoreCard.twos ?? 0,
-                threes: p.scoreCard.threes ?? 0,
-                fours: p.scoreCard.fours ?? 0,
-                fives: p.scoreCard.fives ?? 0,
-                sixes: p.scoreCard.sixes ?? 0,
-                upperSum: totals.upperSum,
-                upperBonus: totals.upperBonus,
-                threeKind: p.scoreCard.threeKind ?? 0,
-                fourKind: p.scoreCard.fourKind ?? 0,
-                fullHouse: p.scoreCard.fullHouse ?? 0,
-                smStraight: p.scoreCard.smStraight ?? 0,
-                lgStraight: p.scoreCard.lgStraight ?? 0,
-                yahtzee: p.scoreCard.yahtzee ?? 0,
-                chance: p.scoreCard.chance ?? 0,
-                yahtzeeBonusTotal: totals.yahtzeeBonusTotal,
-                grandTotal: totals.grandTotal
-            };
-
-            history.unshift(entry);
-            try {
-                localStorage.setItem('yahtzee_deluxe_full_history', JSON.stringify(history));
+                let scores = JSON.parse(localStorage.getItem('yahtzee_deluxe_scores') || '[]');
+                scores.push({ name, score, date: new Date().toLocaleDateString() });
+                scores.sort((a, b) => b.score - a.score);
+                scores = scores.slice(0, 10); // Keep top 10
+                localStorage.setItem('yahtzee_deluxe_scores', JSON.stringify(scores));
             } catch (e) {
                 console.error("Storage error:", e);
             }
-
-            return { percentile, isFirst, totalGames: history.length };
         }
 
         function renderHighScoresList() {
             DOM.highScoresList.innerHTML = '';
-            const history = getGameHistory();
+            let scores = [];
+            try {
+                scores = JSON.parse(localStorage.getItem('yahtzee_deluxe_scores') || '[]');
+            } catch (e) {}
 
-            if (history.length === 0) {
-                DOM.highScoresList.innerHTML = `<div class="text-center text-sm text-gray-400 py-6">No scores recorded yet! Complete a game to save history.</div>`;
+            if (scores.length === 0) {
+                DOM.highScoresList.innerHTML = `<div class="text-center text-sm text-gray-400 py-6">No high scores recorded yet!</div>`;
                 return;
             }
 
-            // Display all historical entries sorted by grandTotal
-            const sorted = [...history].sort((a, b) => b.grandTotal - a.grandTotal);
-
-            sorted.forEach((s, idx) => {
+            scores.forEach((s, idx) => {
                 const item = document.createElement('div');
-                item.className = 'p-3 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between text-sm hover:bg-white/10 transition-all';
+                item.className = 'p-3 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between text-sm';
                 item.innerHTML = `
                     <div class="flex items-center gap-3">
                         <span class="font-bold font-cinzel text-amber-400 text-base">#${idx + 1}</span>
                         <div>
-                            <div class="font-bold text-gray-200 flex items-center gap-2">
-                                <span>${s.player}</span>
-                                <span class="text-[10px] font-normal px-2 py-0.5 rounded bg-black/40 text-gray-400 border border-white/5">${s.mode}</span>
-                            </div>
-                            <div class="text-[11px] text-gray-400">${s.date}</div>
+                            <div class="font-bold text-gray-200">${s.name}</div>
+                            <div class="text-xs text-gray-500">${s.date}</div>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <div class="font-extrabold font-cinzel text-amber-300 text-base">${s.grandTotal} pts</div>
-                        <div class="text-[10px] text-gray-400">Upper: ${s.upperSum} ${s.upperBonus > 0 ? '(+35)' : ''}</div>
-                    </div>
+                    <span class="font-extrabold font-cinzel text-amber-300 text-base">${s.score} pts</span>
                 `;
                 DOM.highScoresList.appendChild(item);
             });
-        }
-
-        function downloadScoresCSV() {
-            const history = getGameHistory();
-            if (history.length === 0) return;
-
-            const headers = [
-                "Date & Time", "Player Name", "Game Mode",
-                "Ones", "Twos", "Threes", "Fours", "Fives", "Sixes",
-                "Upper Subtotal", "Upper Bonus (+35)",
-                "3 of a Kind", "4 of a Kind", "Full House", "Small Straight", "Large Straight", "Yahtzee", "Chance",
-                "Yahtzee Bonus Pts", "Grand Total"
-            ];
-
-            const rows = history.map(h => [
-                `"${h.date || ''}"`,
-                `"${(h.player || '').replace(/"/g, '""')}"`,
-                `"${h.mode || ''}"`,
-                h.ones,
-                h.twos,
-                h.threes,
-                h.fours,
-                h.fives,
-                h.sixes,
-                h.upperSum,
-                h.upperBonus,
-                h.threeKind,
-                h.fourKind,
-                h.fullHouse,
-                h.smStraight,
-                h.lgStraight,
-                h.yahtzee,
-                h.chance,
-                h.yahtzeeBonusTotal,
-                h.grandTotal
-            ]);
-
-            const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-            
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.setAttribute("href", url);
-            link.setAttribute("download", `yahtzee_scores_${new Date().toISOString().slice(0, 10)}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
         }
 
         /**
@@ -984,12 +1419,8 @@
             });
             DOM.closeHighScoresBtn.addEventListener('click', () => DOM.highScoresModal.classList.add('hidden'));
 
-            DOM.exportCsvBtn.addEventListener('click', () => {
-                downloadScoresCSV();
-            });
-
             DOM.clearHighScoresBtn.addEventListener('click', () => {
-                localStorage.removeItem('yahtzee_deluxe_full_history');
+                localStorage.removeItem('yahtzee_deluxe_scores');
                 renderHighScoresList();
             });
 
